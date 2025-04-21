@@ -3,24 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple PixiJS Example</title>
+    <title>Native Canvas 2D Example</title>
     <style>
         body, html {
             margin: 0;
             padding: 0;
             overflow: hidden; /* Prevent scrollbars */
             display: flex;
+            flex-direction: column; /* Stack canvas and message box */
             justify-content: center;
             align-items: center;
             height: 100vh;
             background-color: #f0f0f0; /* Light grey background */
+            font-family: sans-serif;
         }
         canvas {
             border: 1px solid black;
             display: block; /* Ensure canvas behaves like a block element */
+            background-color: #AAAAAA; /* Grey background for canvas */
         }
         #messageBox {
-            position: absolute;
+            position: absolute; /* Position relative to body */
             top: 10px;
             left: 50%;
             transform: translateX(-50%);
@@ -30,13 +33,16 @@
             border-radius: 5px;
             display: none; /* Hidden by default */
             z-index: 100;
-            font-family: sans-serif;
         }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.0/pixi.min.js"></script>
 </head>
 <body>
-    <div id="messageBox">This is a message!</div>
+    <div id="messageBox">Message will appear here</div>
+
+    <canvas id="gameCanvas" width="400" height="300">
+        Your browser does not support the HTML canvas tag.
+    </canvas>
+
     <script>
         // --- Configuration ---
         const CANVAS_WIDTH = 400;
@@ -45,100 +51,74 @@
         const MOVEMENT_SPEED = 5;
 
         // --- Global Variables ---
-        let app; // Pixi Application instance
-        let box; // The interactive box
+        let canvas; // The canvas element
+        let ctx; // The 2D rendering context
         let messageBox; // Message display element
+        let box; // Object to hold box properties
 
         // --- Initialization ---
         function setup() {
-            try {
-                // Check if PIXI is defined *before* using it
-                if (typeof PIXI === 'undefined') {
-                    throw new Error("PixiJS library (PIXI) not found. Make sure it's loaded correctly.");
-                }
+            canvas = document.getElementById('gameCanvas');
+            messageBox = document.getElementById('messageBox');
 
-                // 1. Create the Pixi Application
-                app = new PIXI.Application({
-                    width: CANVAS_WIDTH,
-                    height: CANVAS_HEIGHT,
-                    backgroundColor: 0xAAAAAA, // Grey background
-                    antialias: true, // Smoother edges
-                });
-
-                // 2. Add the canvas to the HTML document
-                // Ensure the view (canvas) exists before appending
-                if (app.view) {
-                    document.body.appendChild(app.view);
-                } else {
-                     throw new Error("PixiJS failed to create a canvas element.");
-                }
-
-
-                // 3. Get the message box element
-                messageBox = document.getElementById('messageBox');
-                if (!messageBox) {
-                    console.error("Message box element not found!");
-                }
-
-
-                // 4. Create the interactive box graphics object
-                box = new PIXI.Graphics();
-
-                // --- ** Corrected Drawing Method ** ---
-                // Set the fill color *before* drawing
-                box.fill(0x0077FF); // Blue color
-                // Draw the rectangle shape using drawRect
-                box.drawRect(0, 0, BOX_SIZE, BOX_SIZE);
-                // Indicate that filling is finished (good practice)
-                box.fill();
-                // --- ** End of Correction ** ---
-
-                // Position the box (origin is top-left of the drawn shape)
-                box.position.set(
-                    (CANVAS_WIDTH - BOX_SIZE) / 2,
-                    (CANVAS_HEIGHT - BOX_SIZE) / 2
-                ); // Center the box
-
-                // Make it interactive
-                box.interactive = true; // Make it respond to events
-                box.cursor = 'pointer'; // Change cursor on hover
-
-                // 5. Add event listeners to the box
-                box.on('pointerdown', onBoxClick); // Click/tap event
-
-                // 6. Add the box to the stage
-                app.stage.addChild(box);
-
-                // 7. Set up keyboard controls
-                setupKeyboardControls();
-
-                // Optional: Add a game loop if needed for continuous updates
-                // app.ticker.add(gameLoop);
-
-                showMessage("PixiJS setup complete. Click the box or use arrow keys.", 3000);
-
-            } catch (error) {
-                console.error("Error setting up PixiJS Application:", error);
-                // Display error to the user in a more friendly way if possible
-                showMessage(`Setup Error: ${error.message}`, 5000); // Show setup errors
+            if (!canvas || !messageBox) {
+                console.error("Canvas or Message Box element not found!");
+                return;
             }
+
+            // Set canvas dimensions explicitly (good practice)
+            canvas.width = CANVAS_WIDTH;
+            canvas.height = CANVAS_HEIGHT;
+
+            // Get the 2D rendering context
+            ctx = canvas.getContext('2d');
+
+            if (!ctx) {
+                showMessage("Could not get 2D context. Canvas may not be supported.", 5000);
+                return;
+            }
+
+            // Initialize the box object
+            box = {
+                x: (CANVAS_WIDTH - BOX_SIZE) / 2,
+                y: (CANVAS_HEIGHT - BOX_SIZE) / 2,
+                width: BOX_SIZE,
+                height: BOX_SIZE,
+                color: '#0077FF' // Initial blue color (hex)
+            };
+
+            // Add event listeners
+            setupEventListeners();
+
+            // Start the drawing loop
+            draw(); // Initial draw
+
+            showMessage("Canvas setup complete. Click the box or use arrow keys.", 3000);
+        }
+
+        // --- Drawing ---
+        function draw() {
+            if (!ctx || !box) return; // Ensure context and box exist
+
+            // 1. Clear the entire canvas
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // 2. Set the fill style for the box
+            ctx.fillStyle = box.color;
+
+            // 3. Draw the filled rectangle
+            ctx.fillRect(box.x, box.y, box.width, box.height);
+
+            // Optional: Draw box outline
+            // ctx.strokeStyle = 'black';
+            // ctx.lineWidth = 1;
+            // ctx.strokeRect(box.x, box.y, box.width, box.height);
         }
 
         // --- Event Handlers ---
-        function onBoxClick() {
-            // Clear previous graphics, set new fill, and redraw
-            box.clear(); // Clear the old drawing
-            const randomColor = Math.random() * 0xFFFFFF;
-            box.fill(randomColor); // Set the new fill color
-            box.drawRect(0, 0, BOX_SIZE, BOX_SIZE); // Redraw the rectangle
-            box.fill(); // Finish filling
-            showMessage("Box clicked!", 2000);
-        }
-
         function handleKeyDown(event) {
             let moved = false;
-            // Check if the box exists before trying to move it
-            if (!box) return;
+            if (!box) return; // Ensure box exists
 
             switch (event.key) {
                 case 'ArrowUp':
@@ -148,7 +128,7 @@
                     }
                     break;
                 case 'ArrowDown':
-                    if (box.y < CANVAS_HEIGHT - BOX_SIZE) {
+                    if (box.y < CANVAS_HEIGHT - box.height) {
                         box.y += MOVEMENT_SPEED;
                         moved = true;
                     }
@@ -160,28 +140,57 @@
                     }
                     break;
                 case 'ArrowRight':
-                    if (box.x < CANVAS_WIDTH - BOX_SIZE) {
+                    if (box.x < CANVAS_WIDTH - box.width) {
                         box.x += MOVEMENT_SPEED;
                         moved = true;
                     }
                     break;
             }
+
             if (moved) {
                  // Prevent default browser scroll behavior for arrow keys
                 event.preventDefault();
+                draw(); // Redraw the canvas after moving the box
             }
         }
 
+        function handleCanvasClick(event) {
+            if (!canvas || !box) return; // Ensure canvas and box exist
+
+            // Get click coordinates relative to the canvas
+            const rect = canvas.getBoundingClientRect(); // Gets canvas position on page
+            const clickX = event.clientX - rect.left;
+            const clickY = event.clientY - rect.top;
+
+            // Check if the click was inside the box boundaries
+            if (
+                clickX >= box.x &&
+                clickX <= box.x + box.width &&
+                clickY >= box.y &&
+                clickY <= box.y + box.height
+            ) {
+                // Change box color on click
+                const randomHex = Math.floor(Math.random()*16777215).toString(16);
+                box.color = "#" + randomHex.padStart(6, '0'); // Ensure 6 digits
+                draw(); // Redraw with the new color
+                showMessage("Box clicked!", 2000);
+            }
+        }
+
+
         // --- Utility Functions ---
-        function setupKeyboardControls() {
+         function setupEventListeners() {
+            // Listen for keyboard events on the window
             window.addEventListener('keydown', handleKeyDown);
+            // Listen for click events on the canvas
+            canvas.addEventListener('click', handleCanvasClick);
         }
 
         function showMessage(text, duration = 3000) {
             if (!messageBox) return; // Don't proceed if messageBox isn't found
             messageBox.textContent = text;
             messageBox.style.display = 'block';
-            // Hide the message after the specified duration
+
             // Clear any existing timeout to prevent overlaps
             if (messageBox.timeoutId) {
                 clearTimeout(messageBox.timeoutId);
@@ -192,14 +201,8 @@
             }, duration);
         }
 
-        // --- Game Loop (Optional) ---
-        // function gameLoop(delta) {
-        //     // Code here runs on every frame update
-        //     // Example: box.rotation += 0.01 * delta;
-        // }
-
         // --- Start the application ---
-        // Ensure the DOM is fully loaded before trying to setup Pixi
+        // Ensure the DOM is fully loaded before trying to get canvas context
         window.onload = setup;
 
     </script>
