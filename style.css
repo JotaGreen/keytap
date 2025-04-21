@@ -1,0 +1,413 @@
+/* style.css */
+
+/* ========================= */
+/*      Global Styles        */
+/* ========================= */
+
+/* Apply box-sizing to all elements for easier layout */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+/* Base body styles - can override inline styles if needed */
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif; /* Modern system fonts */
+    overflow: hidden; /* Prevent scrollbars on the body */
+    color: var(--text-color); /* Use CSS variables for theme colors */
+    background-color: var(--background-color);
+    overscroll-behavior: none; /* Prevent bounce effect on mobile */
+    width: 100vw; /* Full viewport width */
+    height: 100vh; /* Full viewport height */
+    position: fixed; /* Prevent scrolling on some mobile browsers */
+}
+
+/* CSS Variables for Theming */
+:root {
+    --background-color: #f0f0f0;
+    --text-color: #333333;
+    --primary-color: #007bff;
+    --secondary-color: #6c757d;
+    --accent-color: #28a745;
+    --error-color: #dc3545;
+    --button-bg: #e0e0e0;
+    --button-text: #333333;
+    --button-hover-bg: #d0d0d0;
+    --screen-bg: #ffffff;
+    --overlay-bg: rgba(0, 0, 0, 0.6);
+    --health-bar-bg: #e9ecef;
+    --health-bar-fill: #28a745;
+    --health-bar-low: #ffc107;
+    --health-bar-critical: #dc3545;
+    --staff-line-color: #aaaaaa;
+    --key-white: #ffffff;
+    --key-black: #333333;
+    --key-border: #bbbbbb;
+    --key-pressed-color: #dddddd;
+}
+
+/* Dark theme overrides (applied when body has .dark-mode class) */
+body.dark-mode {
+    --background-color: #222222;
+    --text-color: #e0e0e0;
+    --primary-color: #007bff; /* Or adjust for dark mode */
+    --secondary-color: #aaaaaa;
+    --accent-color: #28a745; /* Or adjust */
+    --error-color: #dc3545; /* Or adjust */
+    --button-bg: #444444;
+    --button-text: #e0e0e0;
+    --button-hover-bg: #555555;
+    --screen-bg: #333333;
+    --overlay-bg: rgba(0, 0, 0, 0.75);
+    --health-bar-bg: #555555;
+    --health-bar-fill: #28a745; /* Or adjust */
+    --staff-line-color: #666666;
+    --key-white: #cccccc;
+    --key-black: #222222;
+    --key-border: #555555;
+    --key-pressed-color: #999999;
+}
+
+/* Base styling for all screen containers */
+.screen {
+    display: none; /* Hidden by default */
+    width: 100%;
+    height: 100%; /* Full viewport height */
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-color: var(--screen-bg);
+    color: var(--text-color);
+    padding: 20px;
+    flex-direction: column; /* Default stacking direction */
+    align-items: center; /* Center content horizontally by default */
+    justify-content: center; /* Center content vertically by default */
+    overflow-y: auto; /* Allow scrolling within screen if content overflows */
+}
+
+/* Style for the active screen */
+.screen.active {
+    display: flex; /* Show the active screen using flex layout */
+}
+
+/* Basic button styling */
+button {
+    padding: 10px 20px;
+    font-size: 1em;
+    margin: 10px;
+    cursor: pointer;
+    background-color: var(--button-bg);
+    color: var(--button-text);
+    border: 1px solid var(--secondary-color);
+    border-radius: 5px;
+    transition: background-color 0.2s ease;
+}
+
+button:hover:not(:disabled) {
+    background-color: var(--button-hover-bg);
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Basic input styling */
+input[type="file"], input[type="range"], select {
+    margin: 5px 0 15px 0;
+}
+
+label {
+    margin-right: 10px;
+}
+
+/* ========================= */
+/*    Loading Screen Styles  */
+/* ========================= */
+#loading-screen {
+    justify-content: space-around; /* Space out elements vertically */
+    text-align: center;
+}
+
+#loading-screen h1 {
+    margin-bottom: 15px;
+}
+
+#settings-area {
+    margin-top: 20px;
+    padding: 15px;
+    border: 1px solid var(--secondary-color);
+    border-radius: 8px;
+    max-width: 500px;
+    width: 90%;
+    text-align: left;
+}
+
+#settings-area h2 {
+    text-align: center;
+    margin-top: 0;
+}
+
+#settings-area > div {
+    margin-bottom: 10px;
+    display: flex; /* Align label and control */
+    justify-content: space-between;
+    align-items: center;
+}
+
+#loading-status {
+    margin-top: 10px;
+    min-height: 1.2em; /* Prevent layout shift */
+    color: var(--primary-color);
+}
+
+#loading-indicator {
+    display: none; /* JS will control visibility */
+    position: fixed; /* Overlay */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent white overlay */
+    z-index: 1000; /* Ensure it's on top */
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5em;
+    color: #333;
+}
+
+body.dark-mode #loading-indicator {
+    background-color: rgba(0, 0, 0, 0.8); /* Darker overlay for dark mode */
+    color: #eee;
+}
+
+#loading-indicator.active {
+    display: flex;
+}
+
+/* ========================= */
+/*      Game Screen Styles   */
+/* ========================= */
+#game-screen {
+    padding: 0; /* Remove padding to allow elements to touch edges */
+    justify-content: flex-start; /* Align content to the top */
+    background-color: transparent; /* The canvas will provide the background */
+}
+
+/* Area where PixiJS canvas will be placed */
+#staff-area {
+    width: 100%;
+    background-color: var(--screen-bg); /* Background for the staff area */
+    /* Height determined by orientation */
+    position: relative; /* For positioning elements within, like the judgment line */
+}
+
+#staff-area canvas {
+    display: block; /* Remove extra space below canvas */
+}
+
+/* Container for elements below the staff */
+#bottom-panel {
+    width: 100%;
+    display: flex;
+    background-color: var(--secondary-color); /* A slightly different background */
+    /* Height and layout determined by orientation */
+}
+
+#info-display {
+    padding: 5px 10px;
+    display: flex;
+    flex-direction: column; /* Stack info items vertically by default */
+    justify-content: space-around; /* Space out items */
+    align-items: flex-start; /* Align text to the left */
+    color: var(--text-color); /* Ensure text is readable on panel background */
+    position: relative; /* Needed for absolute positioning of pause button in portrait */
+}
+
+#keyboard-area {
+    /* Size and position determined by orientation.
+       This might just be a target for PixiJS rendering,
+       or could contain HTML elements if needed later. */
+    background-color: var(--background-color); /* A background for the keyboard area */
+}
+
+/* Health Bar Styling */
+#health-bar-container {
+    width: 100%;
+    font-size: 0.9em;
+}
+#health-bar-visual {
+    width: 100%;
+    height: 15px;
+    background-color: var(--health-bar-bg);
+    border: 1px solid var(--secondary-color);
+    border-radius: 3px;
+    overflow: hidden; /* Keep fill contained */
+    margin-top: 3px;
+}
+#health-bar-fill {
+    height: 100%;
+    width: 66.67%; /* Start at 50/75 */
+    background-color: var(--health-bar-fill);
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+#combo-display, #score-display {
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
+#pause-button {
+    padding: 5px 10px;
+    font-size: 0.8em;
+    margin: 0; /* Remove default margins */
+    /* Positioning depends on orientation */
+}
+
+/* =================================== */
+/*    Responsive Layout (Landscape)    */
+/* =================================== */
+@media (orientation: landscape) {
+    #game-screen {
+        flex-direction: column; /* Staff area above bottom panel */
+    }
+
+    #staff-area {
+        height: 66.67vh; /* Top 2/3 of the viewport height */
+    }
+
+    #bottom-panel {
+        height: 33.33vh; /* Bottom 1/3 */
+        flex-direction: row; /* Info display left, keyboard right */
+    }
+
+    #info-display {
+        width: 33.33%; /* Left 1/3 of the bottom panel */
+        border-right: 1px solid var(--secondary-color);
+    }
+
+    #keyboard-area {
+        width: 66.67%; /* Right 2/3 of the bottom panel */
+    }
+
+    #pause-button {
+        /* Position within info-display */
+        align-self: flex-end; /* Push to the bottom right of the flex container */
+    }
+
+    /* Adjust info display text size/layout if needed for landscape */
+     #health-bar-container, #combo-display, #score-display {
+        font-size: 1em; /* Slightly larger */
+     }
+}
+
+/* ================================== */
+/*    Responsive Layout (Portrait)    */
+/* ================================== */
+@media (orientation: portrait) {
+    #game-screen {
+        flex-direction: column; /* Vertical stack */
+    }
+
+    #info-display {
+        width: 100%;
+        height: 25vh; /* Top 1/4 */
+        flex-direction: row; /* Arrange items horizontally */
+        flex-wrap: wrap; /* Allow wrapping if needed */
+        justify-content: space-between; /* Space out items horizontally */
+        align-items: center; /* Center items vertically */
+        padding: 5px 15px;
+        background-color: var(--secondary-color); /* Give it a background */
+        border-bottom: 1px solid var(--text-color);
+    }
+
+     /* Adjust info item widths/margins for horizontal layout */
+    #info-display > div {
+        margin-right: 15px; /* Space between items */
+    }
+    #health-bar-container { width: auto; } /* Don't force full width */
+
+    #pause-button {
+        order: 99; /* Try to push it to the end */
+        position: absolute; /* More precise positioning */
+        top: 10px;
+        right: 15px;
+        padding: 8px 12px;
+    }
+
+    #staff-area {
+        height: 50vh; /* Middle 1/2 */
+        width: 100%;
+    }
+
+    /* Bottom panel is not needed as a separate container in portrait */
+    #bottom-panel {
+        height: 25vh; /* Bottom 1/4 */
+        width: 100%;
+        padding: 0;
+        background-color: transparent;
+        /* Keyboard area takes up the entire bottom panel space */
+    }
+
+    #keyboard-area {
+         width: 100%;
+         height: 100%;
+    }
+}
+
+
+/* ========================= */
+/*    Pause Overlay Styles   */
+/* ========================= */
+#pause-overlay {
+    background-color: var(--overlay-bg);
+    color: white; /* Text on overlay is usually light */
+    z-index: 500; /* Ensure it's above the game screen but below modals if any */
+}
+
+#pause-overlay h2 {
+    color: white;
+}
+
+#pause-volume-control {
+    /* Style volume control specifically for the pause menu if needed */
+    margin: 20px 0;
+}
+
+
+/* ========================= */
+/*    Results Screen Styles  */
+/* ========================= */
+#results-screen {
+    text-align: center;
+}
+
+#results-screen h2 {
+    margin-bottom: 20px;
+}
+
+#final-score {
+    font-size: 1.5em;
+    font-weight: bold;
+    margin-bottom: 15px;
+}
+
+#performance-stats p {
+    margin: 5px 0;
+    font-size: 1.1em;
+}
+
+#result-message {
+    font-size: 1.3em;
+    font-weight: bold;
+    margin: 20px 0;
+}
+
+/* Example result message styling */
+#result-message.success {
+    color: var(--accent-color);
+}
+
+#result-message.failure {
+    color: var(--error-color);
+}
