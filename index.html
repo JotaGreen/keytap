@@ -66,7 +66,13 @@
                 });
 
                 // 2. Add the canvas to the HTML document
-                document.body.appendChild(app.view);
+                // Ensure the view (canvas) exists before appending
+                if (app.view) {
+                    document.body.appendChild(app.view);
+                } else {
+                     throw new Error("PixiJS failed to create a canvas element.");
+                }
+
 
                 // 3. Get the message box element
                 messageBox = document.getElementById('messageBox');
@@ -75,14 +81,25 @@
                 }
 
 
-                // 4. Create the interactive box
+                // 4. Create the interactive box graphics object
                 box = new PIXI.Graphics();
-                box.rect(0, 0, BOX_SIZE, BOX_SIZE); // Define the rectangle shape
+
+                // --- ** Corrected Drawing Method ** ---
+                // Set the fill color *before* drawing
                 box.fill(0x0077FF); // Blue color
+                // Draw the rectangle shape using drawRect
+                box.drawRect(0, 0, BOX_SIZE, BOX_SIZE);
+                // Indicate that filling is finished (good practice)
+                box.fill();
+                // --- ** End of Correction ** ---
+
+                // Position the box (origin is top-left of the drawn shape)
                 box.position.set(
                     (CANVAS_WIDTH - BOX_SIZE) / 2,
                     (CANVAS_HEIGHT - BOX_SIZE) / 2
                 ); // Center the box
+
+                // Make it interactive
                 box.interactive = true; // Make it respond to events
                 box.cursor = 'pointer'; // Change cursor on hover
 
@@ -103,20 +120,26 @@
             } catch (error) {
                 console.error("Error setting up PixiJS Application:", error);
                 // Display error to the user in a more friendly way if possible
-                showMessage(`Error: ${error.message}`, 5000);
+                showMessage(`Setup Error: ${error.message}`, 5000); // Show setup errors
             }
         }
 
         // --- Event Handlers ---
         function onBoxClick() {
-            // Change box color on click
+            // Clear previous graphics, set new fill, and redraw
+            box.clear(); // Clear the old drawing
             const randomColor = Math.random() * 0xFFFFFF;
-            box.fill(randomColor);
+            box.fill(randomColor); // Set the new fill color
+            box.drawRect(0, 0, BOX_SIZE, BOX_SIZE); // Redraw the rectangle
+            box.fill(); // Finish filling
             showMessage("Box clicked!", 2000);
         }
 
         function handleKeyDown(event) {
             let moved = false;
+            // Check if the box exists before trying to move it
+            if (!box) return;
+
             switch (event.key) {
                 case 'ArrowUp':
                     if (box.y > 0) {
@@ -159,8 +182,13 @@
             messageBox.textContent = text;
             messageBox.style.display = 'block';
             // Hide the message after the specified duration
-            setTimeout(() => {
+            // Clear any existing timeout to prevent overlaps
+            if (messageBox.timeoutId) {
+                clearTimeout(messageBox.timeoutId);
+            }
+            messageBox.timeoutId = setTimeout(() => {
                 messageBox.style.display = 'none';
+                messageBox.timeoutId = null; // Clear the stored ID
             }, duration);
         }
 
