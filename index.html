@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PixiJS Game</title>
+    <title>Simple PixiJS Example</title>
     <style>
         body, html {
             margin: 0;
@@ -14,173 +14,165 @@
             align-items: center;
             height: 100vh;
             background-color: #f0f0f0; /* Light grey background */
-            font-family: 'Arial', sans-serif;
-        }
-        #game-container {
-            border: 1px solid #ccc;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        #error-message {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: red;
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 5px;
-            border-radius: 3px;
-            display: none; /* Hidden by default */
         }
         canvas {
-             display: block; /* Prevent extra space below canvas */
-             width: 100%; /* Ensure canvas scales if container size changes */
-             height: 100%;
+            border: 1px solid black;
+            display: block; /* Ensure canvas behaves like a block element */
+        }
+        #messageBox {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            display: none; /* Hidden by default */
+            z-index: 100;
+            font-family: sans-serif;
         }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.0/pixi.min.js"></script>
 </head>
 <body>
-    <div id="game-container">
-        </div>
-    <div id="error-message"></div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.0/pixi.min.js" integrity="sha512-cPmgWbs/YQd+Y6q1/7FdsYV0qj7+n4/9/T7u3oGzPE+0k1+S+5x/q+Y4f+PzTDR8BClt+2/a7+uW0o+zQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pixi-sound@5.2.2/dist/pixi-sound.js"></script>
-
+    <div id="messageBox">This is a message!</div>
     <script>
-        // Get the container and error message elements
-        const gameContainer = document.getElementById('game-container');
-        const errorMessageDiv = document.getElementById('error-message');
-        let app; // Declare app variable in a higher scope
+        // --- Configuration ---
+        const CANVAS_WIDTH = 400;
+        const CANVAS_HEIGHT = 300;
+        const BOX_SIZE = 50;
+        const MOVEMENT_SPEED = 5;
 
-        // Function to display errors on the page
-        function displayError(message) {
-            console.error(message); // Log to console as well
-            errorMessageDiv.textContent = message;
-            errorMessageDiv.style.display = 'block';
-        }
+        // --- Global Variables ---
+        let app; // Pixi Application instance
+        let box; // The interactive box
+        let messageBox; // Message display element
 
-        // --- Game Initialization ---
-        function initializeGame() {
+        // --- Initialization ---
+        function setup() {
             try {
-                // Basic PixiJS Application setup
-                app = new PIXI.Application();
+                // Check if PIXI is defined *before* using it
+                if (typeof PIXI === 'undefined') {
+                    throw new Error("PixiJS library (PIXI) not found. Make sure it's loaded correctly.");
+                }
 
-                // Initialize the application asynchronously
-                // Wait for the app to be ready before adding it to the DOM
-                app.init({
-                    width: 800,       // Desired width
-                    height: 600,      // Desired height
-                    backgroundColor: 0x1099bb, // Example background color
-                    resolution: window.devicePixelRatio || 1,
-                    autoDensity: true // Handles high-density displays
-                }).then(() => {
-                    // Append the PixiJS canvas to the container
-                    gameContainer.appendChild(app.view);
-                    console.log("PixiJS Initialized Successfully.");
-
-                    // Now that PixiJS is initialized, load assets
-                    loadAssets();
-
-                }).catch(initError => {
-                     // Catch errors during app.init()
-                     displayError(`Error initializing PixiJS view: ${initError.message}`);
-                     console.error("Initialization Error Details:", initError);
+                // 1. Create the Pixi Application
+                app = new PIXI.Application({
+                    width: CANVAS_WIDTH,
+                    height: CANVAS_HEIGHT,
+                    backgroundColor: 0xAAAAAA, // Grey background
+                    antialias: true, // Smoother edges
                 });
 
+                // 2. Add the canvas to the HTML document
+                document.body.appendChild(app.view);
+
+                // 3. Get the message box element
+                messageBox = document.getElementById('messageBox');
+                if (!messageBox) {
+                    console.error("Message box element not found!");
+                }
+
+
+                // 4. Create the interactive box
+                box = new PIXI.Graphics();
+                box.rect(0, 0, BOX_SIZE, BOX_SIZE); // Define the rectangle shape
+                box.fill(0x0077FF); // Blue color
+                box.position.set(
+                    (CANVAS_WIDTH - BOX_SIZE) / 2,
+                    (CANVAS_HEIGHT - BOX_SIZE) / 2
+                ); // Center the box
+                box.interactive = true; // Make it respond to events
+                box.cursor = 'pointer'; // Change cursor on hover
+
+                // 5. Add event listeners to the box
+                box.on('pointerdown', onBoxClick); // Click/tap event
+
+                // 6. Add the box to the stage
+                app.stage.addChild(box);
+
+                // 7. Set up keyboard controls
+                setupKeyboardControls();
+
+                // Optional: Add a game loop if needed for continuous updates
+                // app.ticker.add(gameLoop);
+
+                showMessage("PixiJS setup complete. Click the box or use arrow keys.", 3000);
+
             } catch (error) {
-                // Catch synchronous errors during new PIXI.Application() or setup
-                displayError(`Error setting up PixiJS Application: ${error.message}`);
-                console.error("Setup Error Details:", error);
+                console.error("Error setting up PixiJS Application:", error);
+                // Display error to the user in a more friendly way if possible
+                showMessage(`Error: ${error.message}`, 5000);
             }
         }
 
-        // --- Asset Loading ---
-        function loadAssets() {
-            // Check if PIXI.sound exists before trying to use it
-            if (typeof PIXI.sound === 'undefined') {
-                displayError("Error: PIXI.sound is not available. Check library loading order.");
-                return; // Stop asset loading if sound library is missing
+        // --- Event Handlers ---
+        function onBoxClick() {
+            // Change box color on click
+            const randomColor = Math.random() * 0xFFFFFF;
+            box.fill(randomColor);
+            showMessage("Box clicked!", 2000);
+        }
+
+        function handleKeyDown(event) {
+            let moved = false;
+            switch (event.key) {
+                case 'ArrowUp':
+                    if (box.y > 0) {
+                        box.y -= MOVEMENT_SPEED;
+                        moved = true;
+                    }
+                    break;
+                case 'ArrowDown':
+                    if (box.y < CANVAS_HEIGHT - BOX_SIZE) {
+                        box.y += MOVEMENT_SPEED;
+                        moved = true;
+                    }
+                    break;
+                case 'ArrowLeft':
+                     if (box.x > 0) {
+                        box.x -= MOVEMENT_SPEED;
+                        moved = true;
+                    }
+                    break;
+                case 'ArrowRight':
+                    if (box.x < CANVAS_WIDTH - BOX_SIZE) {
+                        box.x += MOVEMENT_SPEED;
+                        moved = true;
+                    }
+                    break;
             }
-
-            // Example: Check if a sound alias exists (if you were loading sounds)
-            // This is just a placeholder - replace with your actual asset loading
-            try {
-                // Example: PIXI.Assets.add('mySound', 'path/to/sound.mp3');
-                // Example: PIXI.Assets.add('myTexture', 'path/to/image.png');
-
-                console.log("Attempting to load assets...");
-
-                // Use PIXI.Assets for loading
-                PIXI.Assets.load([
-                    // Add your asset paths here
-                    // e.g., 'assets/sprite.png',
-                    // e.g., 'assets/background.jpg',
-                    // e.g., { alias: 'coinSound', src: 'assets/coin.wav' }
-                ]).then((resources) => {
-                    console.log("Assets loaded successfully:", resources);
-                    // Assets are loaded, proceed to game setup
-                    setupGameScene(resources);
-                }).catch(loadError => {
-                    displayError(`Error loading assets: ${loadError.message}`);
-                    console.error("Asset Loading Error Details:", loadError);
-                });
-
-            } catch (error) {
-                displayError(`Error during asset loading setup: ${error.message}`);
-                console.error("Asset Setup Error Details:", error);
+            if (moved) {
+                 // Prevent default browser scroll behavior for arrow keys
+                event.preventDefault();
             }
         }
 
-        // --- Game Scene Setup ---
-        function setupGameScene(resources) {
-            console.log("Setting up game scene...");
-            // Add your game objects, sprites, text, etc., to the stage
-            // Example:
-            const basicText = new PIXI.Text({ text: 'Game Ready!', style: { fill: 'white' }});
-            basicText.x = 50;
-            basicText.y = 50;
-            app.stage.addChild(basicText);
+        // --- Utility Functions ---
+        function setupKeyboardControls() {
+            window.addEventListener('keydown', handleKeyDown);
+        }
 
-            // Example using a loaded texture (if you loaded one)
-            // if (resources.myTexture) {
-            //    const sprite = new PIXI.Sprite(resources.myTexture);
-            //    sprite.x = app.screen.width / 2;
-            //    sprite.y = app.screen.height / 2;
-            //    sprite.anchor.set(0.5);
-            //    app.stage.addChild(sprite);
-            // }
-
-            // Example playing a loaded sound (if you loaded one)
-            // if (PIXI.sound.exists('coinSound')) { // Check before playing
-            //    PIXI.sound.play('coinSound');
-            // }
-
-            // Start the game loop (if you have one)
-            // app.ticker.add(gameLoop);
-            console.log("Game scene setup complete.");
+        function showMessage(text, duration = 3000) {
+            if (!messageBox) return; // Don't proceed if messageBox isn't found
+            messageBox.textContent = text;
+            messageBox.style.display = 'block';
+            // Hide the message after the specified duration
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, duration);
         }
 
         // --- Game Loop (Optional) ---
-        // function gameLoop(ticker) {
-        //     // Update game logic, move sprites, etc.
-        //     // console.log(`Delta time: ${ticker.deltaTime}`);
+        // function gameLoop(delta) {
+        //     // Code here runs on every frame update
+        //     // Example: box.rotation += 0.01 * delta;
         // }
 
-        // --- Start the process ---
-        // Use window.onload to ensure the DOM is fully loaded before starting
-        window.onload = () => {
-             console.log("Window loaded. Initializing game...");
-             initializeGame();
-        };
-
-        // Optional: Handle window resizing
-        window.addEventListener('resize', () => {
-            if (app && app.renderer) {
-                 // Example resize logic (might need adjustment based on your layout)
-                 // You might want to resize the renderer and reposition elements
-                 // app.renderer.resize(window.innerWidth, window.innerHeight);
-                 console.log("Window resized. You may need to adjust game elements.");
-            }
-        });
+        // --- Start the application ---
+        // Ensure the DOM is fully loaded before trying to setup Pixi
+        window.onload = setup;
 
     </script>
 </body>
