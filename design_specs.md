@@ -1,17 +1,17 @@
-# Keytap: A Piano Sight Reading Rhythm Game
+# Keytap
 
 ## Overview
-A web-based rhythm game that combines Guitar Hero-style gameplay with piano sheet music sight reading. The game will display a scrolling grand staff with notes that players must tap on a virtual keyboard in time with the music. This game is designed primarily for mobile devices in landscape orientation with portrait mode support.
+A web-based rhythm game that combines Guitar Hero-style gameplay with piano sheet music sight reading. The game will display a scrolling grand staff with notes that players must tap on a virtual keyboard in time with the music. This game is designed primarily for mobile devices in landscape and portrait orientation.
 
 ## Core Technical Requirements
-- Don’t use React or other libraries that require a build process
 - The game should be compatible to be hosted on GitHub pages
+- Don’t use React or other libraries that require a build process.
 - Use Web Audio API for precise audio timing and playback
-- Use PixiJS for rendering the staff, notes, and animations
+- Use Canvas for rendering the staff, notes, and animations
 - Client-side only implementation (no server required)
 - Files should be completely loaded/buffered before gameplay begins to avoid delays or synchronization issues
 - Use audioContext.currentTime as the source of truth for timing animations
-- Add plenty of comments in the code to facilitate understanding and future changes
+- Add plenty of comments in the code and many console logs to facilitate understanding, debugging and future changes
 
 ## Game Screen Layout
 
@@ -173,7 +173,6 @@ A web-based rhythm game that combines Guitar Hero-style gameplay with piano shee
 ## Technical Implementation Notes
 - Use Web Audio API's context.currentTime as source of truth for sync
 - Implement pre-loading and buffering of audio files
-- Use PixiJS for efficient rendering of staff and notes
 - To convert the colors from okhsl to rgb, use as reference the code in https://github.com/bottosson/bottosson.github.io/blob/master/misc/colorpicker/colorconversion.js. It is MIT licensed.
 - Apply a small (~100ms) default pre-delay before starting visual scrolling
 - Calculate note positions dynamically based on audio playback position
