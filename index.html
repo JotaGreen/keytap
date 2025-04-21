@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- Sets the character encoding for the document -->
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- Configures the viewport for responsive design, crucial for mobile devices.
+         - width=device-width: Sets the width of the viewport to the device width.
+         - initial-scale=1.0: Sets the initial zoom level.
+         - maximum-scale=1.0: Prevents zooming in (common for games).
+         - user-scalable=no: Disables user zooming. -->
+
+    <title>Piano Sight Reading Rhythm Game</title>
+    <!-- The title displayed in the browser tab -->
+
+    <link rel="stylesheet" href="style.css">
+    <!-- Links the external CSS file for styling -->
+
+    <style>
+        /* Basic styles to prevent scrolling and hide elements initially */
+        body {
+            margin: 0;
+            overflow: hidden; /* Prevents scrollbars */
+            font-family: sans-serif; /* Basic default font */
+            background-color: #f0f0f0; /* Light background for loading */
+            overscroll-behavior: none; /* Prevents pull-to-refresh/bounce effects */
+        }
+
+        /* Hide all screen divs by default */
+        .screen {
+            display: none; /* Elements with this class are hidden */
+            width: 100%;
+            height: 100vh; /* Full viewport height */
+            position: absolute; /* Allows screens to overlay if needed */
+            top: 0;
+            left: 0;
+            box-sizing: border-box; /* Include padding and border in element's total width and height */
+        }
+
+        /* Style for the currently active screen */
+        .screen.active {
+            display: flex; /* Use flexbox for layout within screens (can be overridden) */
+            flex-direction: column; /* Default layout direction */
+        }
+
+        /* Simple loading indicator */
+        #loading-indicator {
+            display: none; /* Hidden initially */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2em;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <!-- Main container for the entire game interface -->
+    <div id="game-container">
+
+        <!-- ======================== -->
+        <!--      Loading Screen      -->
+        <!-- ======================== -->
+        <!-- This screen is shown first. It handles file loading and settings. -->
+        <div id="loading-screen" class="screen active">
+            <h1>Piano Sight Reading Rhythm Game</h1>
+            <p>Load your song files to begin.</p>
+
+            <!-- File Input Section -->
+            <div>
+                <label for="audio-file-input">Load Audio (MP3):</label>
+                <input type="file" id="audio-file-input" accept=".mp3">
+            </div>
+            <div>
+                <label for="json-file-input">Load Note Map (JSON):</label>
+                <input type="file" id="json-file-input" accept=".json">
+            </div>
+            <div id="loading-status"></div> <!-- To display loading messages -->
+
+            <!-- Settings Section (Placeholders - will be populated by JS) -->
+            <div id="settings-area">
+                <h2>Settings</h2>
+                <!-- Settings controls will be added here dynamically -->
+                <div id="volume-control"></div>
+                <div id="theme-toggle"></div>
+                <div id="scroll-speed"></div>
+                <div id="note-color-toggle"></div>
+                <div id="no-death-mode"></div>
+                <div id="wait-mode"></div>
+                <div id="hit-window"></div>
+                <div id="playback-rate"></div>
+                <div id="note-names-toggle"></div>
+                <div id="latency-calibration">
+                    <button id="calibrate-latency-button">Calibrate Latency</button>
+                    <span id="latency-value">Offset: 0ms</span>
+                </div>
+            </div>
+
+            <!-- Start Button (Initially disabled) -->
+            <button id="start-button" disabled>Load Files to Start</button>
+
+            <!-- Optional: Use test data for development -->
+            <button id="load-test-data-button">Load Test Data</button>
+
+            <!-- Loading indicator during file processing -->
+             <div id="loading-indicator">Loading...</div>
+        </div>
+
+        <!-- ======================== -->
+        <!--       Game Screen        -->
+        <!-- ======================== -->
+        <!-- This screen holds the main gameplay elements. -->
+        <div id="game-screen" class="screen">
+            <!-- This div will contain the PixiJS canvas where the staff is rendered -->
+            <div id="staff-area">
+                <!-- PixiJS will create a <canvas> element here -->
+            </div>
+
+            <!-- This div holds elements typically below the staff -->
+            <div id="bottom-panel">
+                <!-- Info display (Health, Combo, Pause) -->
+                <div id="info-display">
+                    <div id="health-bar-container">
+                        Health: <span id="health-value">50</span> / 75
+                        <div id="health-bar-visual">
+                             <div id="health-bar-fill"></div>
+                        </div>
+                    </div>
+                    <div id="combo-display">Combo: <span id="combo-count">0</span></div>
+                    <div id="score-display">Score: <span id="score-value">0</span></div>
+                    <button id="pause-button">Pause</button>
+                </div>
+
+                <!-- Virtual Piano Keyboard Area -->
+                <div id="keyboard-area">
+                    <!-- PixiJS will render the virtual keyboard here or manage input for this area -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ======================== -->
+        <!--      Pause Overlay       -->
+        <!-- ======================== -->
+        <!-- This screen appears as an overlay when the game is paused. -->
+        <div id="pause-overlay" class="screen">
+            <h2>Paused</h2>
+            <button id="resume-button">Resume</button>
+            <!-- Volume control might be accessible here too -->
+            <div id="pause-volume-control">
+                 <!-- Duplicate or reference volume control -->
+            </div>
+            <button id="quit-button">Quit to Menu</button>
+        </div>
+
+        <!-- ======================== -->
+        <!--     Results Screen       -->
+        <!-- ======================== -->
+        <!-- This screen displays the results after a song is finished or failed. -->
+        <div id="results-screen" class="screen">
+            <h2>Results</h2>
+            <div id="final-score">Score: <span></span></div>
+            <div id="performance-stats">
+                <p>Perfect: <span id="perfect-percent"></span>% (<span id="perfect-count"></span>)</p>
+                <p>Good: <span id="good-percent"></span>% (<span id="good-count"></span>)</p>
+                <p>Miss: <span id="miss-percent"></span>% (<span id="miss-count"></span>)</p>
+                <p>Max Combo: <span id="max-combo"></span></p>
+            </div>
+            <div id="result-message"></div> <!-- e.g., "Song Cleared!" or "Failed!" -->
+            <button id="return-to-menu-button">Return to Menu</button>
+        </div>
+
+    </div> <!-- End #game-container -->
+
+    <!-- JavaScript Libraries -->
+    <!-- PixiJS v7 (using CDN for simplicity, ensure this is a stable version you want) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.0/pixi.min.js" integrity="sha512-G39Yn3jB8uEw9lkZZAZJsu7XQMXKYbmQkXfMLIH9NYAcbTQd63CNADZV82H031V/dWgpbb8O733s0+VBlzxUQw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- If you prefer a local copy, download PixiJS and change the src path -->
+
+    <!-- Color Conversion Utility (as specified) -->
+    <!-- You will need to create this file based on the provided reference -->
+    <script src="colorconversion.js" defer></script>
+
+    <!-- Main Game Logic -->
+    <script src="game.js" defer></script>
+    <!-- The 'defer' attribute ensures the script executes after the HTML is parsed
+         and in the order they appear after scripts without defer/async. -->
+
+</body>
+</html>
