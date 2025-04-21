@@ -3,208 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Native Canvas 2D Example</title>
+    <title>Eruda Toggle Example</title>
     <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            overflow: hidden; /* Prevent scrollbars */
-            display: flex;
-            flex-direction: column; /* Stack canvas and message box */
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #f0f0f0; /* Light grey background */
-            font-family: sans-serif;
-        }
-        canvas {
-            border: 1px solid black;
-            display: block; /* Ensure canvas behaves like a block element */
-            background-color: #AAAAAA; /* Grey background for canvas */
-        }
-        #messageBox {
-            position: absolute; /* Position relative to body */
+        /* Optional: Style the toggle button */
+        #eruda-toggle-btn {
+            position: fixed;
             top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(0, 0, 0, 0.7);
+            right: 10px;
+            padding: 10px;
+            background-color: #007bff;
             color: white;
-            padding: 10px 20px;
+            border: none;
             border-radius: 5px;
-            display: none; /* Hidden by default */
-            z-index: 100;
+            cursor: pointer;
+            z-index: 9999;
+        }
+        #eruda-toggle-btn:hover {
+            background-color: #0056b3;
         }
     </style>
 </head>
 <body>
-    <div id="messageBox">Message will appear here</div>
+    <!-- Your page content -->
+    <h1>My Webpage</h1>
+    <p>This is a sample page with Eruda and a toggle button.</p>
 
-    <canvas id="gameCanvas" width="400" height="300">
-        Your browser does not support the HTML canvas tag.
-    </canvas>
+    <!-- Toggle button for Eruda -->
+    <button id="eruda-toggle-btn">Toggle Eruda</button>
 
+    <!-- Include Eruda script -->
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>
-        // --- Configuration ---
-        const CANVAS_WIDTH = 400;
-        const CANVAS_HEIGHT = 300;
-        const BOX_SIZE = 50;
-        const MOVEMENT_SPEED = 5;
+        // Initialize Eruda
+        eruda.init();
 
-        // --- Global Variables ---
-        let canvas; // The canvas element
-        let ctx; // The 2D rendering context
-        let messageBox; // Message display element
-        let box; // Object to hold box properties
+        // Hide Eruda by default (optional)
+        eruda.hide();
 
-        // --- Initialization ---
-        function setup() {
-            canvas = document.getElementById('gameCanvas');
-            messageBox = document.getElementById('messageBox');
+        // Get the toggle button
+        const toggleBtn = document.getElementById('eruda-toggle-btn');
+        let isErudaVisible = false;
 
-            if (!canvas || !messageBox) {
-                console.error("Canvas or Message Box element not found!");
-                return;
+        // Toggle Eruda visibility on button click
+        toggleBtn.addEventListener('click', () => {
+            if (isErudaVisible) {
+                eruda.hide();
+                toggleBtn.textContent = 'Show Eruda';
+            } else {
+                eruda.show();
+                toggleBtn.textContent = 'Hide Eruda';
             }
-
-            // Set canvas dimensions explicitly (good practice)
-            canvas.width = CANVAS_WIDTH;
-            canvas.height = CANVAS_HEIGHT;
-
-            // Get the 2D rendering context
-            ctx = canvas.getContext('2d');
-
-            if (!ctx) {
-                showMessage("Could not get 2D context. Canvas may not be supported.", 5000);
-                return;
-            }
-
-            // Initialize the box object
-            box = {
-                x: (CANVAS_WIDTH - BOX_SIZE) / 2,
-                y: (CANVAS_HEIGHT - BOX_SIZE) / 2,
-                width: BOX_SIZE,
-                height: BOX_SIZE,
-                color: '#0077FF' // Initial blue color (hex)
-            };
-
-            // Add event listeners
-            setupEventListeners();
-
-            // Start the drawing loop
-            draw(); // Initial draw
-
-            showMessage("Canvas setup complete. Click the box or use arrow keys.", 3000);
-        }
-
-        // --- Drawing ---
-        function draw() {
-            if (!ctx || !box) return; // Ensure context and box exist
-
-            // 1. Clear the entire canvas
-            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-            // 2. Set the fill style for the box
-            ctx.fillStyle = box.color;
-
-            // 3. Draw the filled rectangle
-            ctx.fillRect(box.x, box.y, box.width, box.height);
-
-            // Optional: Draw box outline
-            // ctx.strokeStyle = 'black';
-            // ctx.lineWidth = 1;
-            // ctx.strokeRect(box.x, box.y, box.width, box.height);
-        }
-
-        // --- Event Handlers ---
-        function handleKeyDown(event) {
-            let moved = false;
-            if (!box) return; // Ensure box exists
-
-            switch (event.key) {
-                case 'ArrowUp':
-                    if (box.y > 0) {
-                        box.y -= MOVEMENT_SPEED;
-                        moved = true;
-                    }
-                    break;
-                case 'ArrowDown':
-                    if (box.y < CANVAS_HEIGHT - box.height) {
-                        box.y += MOVEMENT_SPEED;
-                        moved = true;
-                    }
-                    break;
-                case 'ArrowLeft':
-                     if (box.x > 0) {
-                        box.x -= MOVEMENT_SPEED;
-                        moved = true;
-                    }
-                    break;
-                case 'ArrowRight':
-                    if (box.x < CANVAS_WIDTH - box.width) {
-                        box.x += MOVEMENT_SPEED;
-                        moved = true;
-                    }
-                    break;
-            }
-
-            if (moved) {
-                 // Prevent default browser scroll behavior for arrow keys
-                event.preventDefault();
-                draw(); // Redraw the canvas after moving the box
-            }
-        }
-
-        function handleCanvasClick(event) {
-            if (!canvas || !box) return; // Ensure canvas and box exist
-
-            // Get click coordinates relative to the canvas
-            const rect = canvas.getBoundingClientRect(); // Gets canvas position on page
-            const clickX = event.clientX - rect.left;
-            const clickY = event.clientY - rect.top;
-
-            // Check if the click was inside the box boundaries
-            if (
-                clickX >= box.x &&
-                clickX <= box.x + box.width &&
-                clickY >= box.y &&
-                clickY <= box.y + box.height
-            ) {
-                // Change box color on click
-                const randomHex = Math.floor(Math.random()*16777215).toString(16);
-                box.color = "#" + randomHex.padStart(6, '0'); // Ensure 6 digits
-                draw(); // Redraw with the new color
-                showMessage("Box clicked!", 2000);
-            }
-        }
-
-
-        // --- Utility Functions ---
-         function setupEventListeners() {
-            // Listen for keyboard events on the window
-            window.addEventListener('keydown', handleKeyDown);
-            // Listen for click events on the canvas
-            canvas.addEventListener('click', handleCanvasClick);
-        }
-
-        function showMessage(text, duration = 3000) {
-            if (!messageBox) return; // Don't proceed if messageBox isn't found
-            messageBox.textContent = text;
-            messageBox.style.display = 'block';
-
-            // Clear any existing timeout to prevent overlaps
-            if (messageBox.timeoutId) {
-                clearTimeout(messageBox.timeoutId);
-            }
-            messageBox.timeoutId = setTimeout(() => {
-                messageBox.style.display = 'none';
-                messageBox.timeoutId = null; // Clear the stored ID
-            }, duration);
-        }
-
-        // --- Start the application ---
-        // Ensure the DOM is fully loaded before trying to get canvas context
-        window.onload = setup;
-
+            isErudaVisible = !isErudaVisible;
+        });
     </script>
 </body>
 </html>
