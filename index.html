@@ -3,388 +3,183 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PixiJS Rhythm Game</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/8.1.5/pixi.min.js" integrity="sha512-/XDR3Ab3hBMcXl6U5GKMzqRcvwFwE889gVOyStms2+5QCF92r7X7/7k30+jIgV67sQCL9QWJtqK41P5LhS+8AQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pixi-sound/dist/pixi-sound.js"></script>
+    <title>PixiJS Game</title>
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #111; display: flex; justify-content: center; align-items: center; font-family: sans-serif; }
-        canvas { display: block; }
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; pointer-events: none; /* Allow clicks to pass through to canvas */ }
-        .button {
-            padding: 15px 30px;
-            font-size: 1.2em;
-            background-color: #444;
-            color: white;
-            border: 2px solid #666;
-            border-radius: 10px;
-            cursor: pointer;
-            margin: 10px;
-            pointer-events: all; /* Make buttons clickable */
-            transition: background-color 0.3s, transform 0.1s;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevent scrollbars */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0; /* Light grey background */
+            font-family: 'Arial', sans-serif;
         }
-        .button:hover { background-color: #555; }
-        .button:active { transform: scale(0.95); }
-        #loading-progress { margin-top: 20px; width: 80%; max-width: 400px; height: 20px; background-color: #333; border-radius: 5px; overflow: hidden; border: 1px solid #555; }
-        #loading-bar { width: 0%; height: 100%; background-color: #4CAF50; transition: width 0.1s ease-out; }
-        #file-inputs { background-color: rgba(0,0,0,0.7); padding: 30px; border-radius: 15px; box-shadow: 0 0 15px rgba(0,0,0,0.5); pointer-events: all; text-align: center; }
-        #file-inputs label { display: block; margin: 10px 0 5px; }
-        #file-inputs input[type="file"] { margin-bottom: 15px; }
-        #status-message { margin-top: 20px; font-size: 1.1em; color: #ddd; min-height: 1.5em; }
-        #error-message { color: #ff6b6b; margin-top: 15px; font-weight: bold; }
-        #game-screen, #loading-screen, #start-screen { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; position: absolute; top: 0; left: 0; }
-        /* Hide screens initially */
-        #game-screen, #loading-screen { display: none; }
+        #game-container {
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        #error-message {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: red;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 5px;
+            border-radius: 3px;
+            display: none; /* Hidden by default */
+        }
+        canvas {
+             display: block; /* Prevent extra space below canvas */
+             width: 100%; /* Ensure canvas scales if container size changes */
+             height: 100%;
+        }
     </style>
 </head>
 <body>
-    <div id="ui-layer">
-        <div id="start-screen">
-            <div id="file-inputs">
-                <h2>Load Game Assets</h2>
-                <label for="audio-file">Select Audio File (.mp3):</label>
-                <input type="file" id="audio-file" accept=".mp3">
-
-                <label for="json-file">Select Chart File (.json):</label>
-                <input type="file" id="json-file" accept=".json">
-
-                <button id="load-button" class="button">Load Assets</button>
-                <div id="status-message">Select files and click Load.</div>
-                <div id="error-message"></div>
-            </div>
+    <div id="game-container">
         </div>
+    <div id="error-message"></div>
 
-        <div id="loading-screen">
-            <h2>Loading...</h2>
-            <div id="loading-progress">
-                <div id="loading-bar"></div>
-            </div>
-            <div id="loading-status">Loading assets...</div>
-        </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.0/pixi.min.js" integrity="sha512-cPmgWbs/YQd+Y6q1/7FdsYV0qj7+n4/9/T7u3oGzPE+0k1+S+5x/q+Y4f+PzTDR8BClt+2/a7+uW0o+zQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pixi-sound@5.2.2/dist/pixi-sound.js"></script>
 
-        <div id="game-screen">
-            <button id="start-game-button" class="button">Start Game</button>
-        </div>
-    </div>
+    <script>
+        // Get the container and error message elements
+        const gameContainer = document.getElementById('game-container');
+        const errorMessageDiv = document.getElementById('error-message');
+        let app; // Declare app variable in a higher scope
 
-    <script type="module">
-        // --- Configuration ---
-        const GAME_WIDTH = 800;
-        const GAME_HEIGHT = 600;
+        // Function to display errors on the page
+        function displayError(message) {
+            console.error(message); // Log to console as well
+            errorMessageDiv.textContent = message;
+            errorMessageDiv.style.display = 'block';
+        }
 
-        // --- Global Variables ---
-        let app; // Pixi Application instance
-        let audioContext; // Web Audio API AudioContext
-        let audioBuffer; // Decoded audio data
-        let chartData; // Parsed JSON chart data
-        let gameAssets; // Store loaded assets (sound, textures, etc.)
-        let soundInstance; // PixiSound instance for playback control
-
-        // --- DOM Elements ---
-        const uiLayer = document.getElementById('ui-layer');
-        const startScreen = document.getElementById('start-screen');
-        const loadingScreen = document.getElementById('loading-screen');
-        const gameScreen = document.getElementById('game-screen');
-        const loadButton = document.getElementById('load-button');
-        const audioFileInput = document.getElementById('audio-file');
-        const jsonFileInput = document.getElementById('json-file');
-        const loadingBar = document.getElementById('loading-bar');
-        const loadingStatus = document.getElementById('loading-status');
-        const statusMessage = document.getElementById('status-message');
-        const errorMessage = document.getElementById('error-message');
-        const startGameButton = document.getElementById('start-game-button');
-
-        // --- Initialization ---
-        async function initializePixi() {
+        // --- Game Initialization ---
+        function initializeGame() {
             try {
-                // Create Pixi Application
+                // Basic PixiJS Application setup
                 app = new PIXI.Application();
 
-                // Initialize the application
-                await app.init({
-                    width: GAME_WIDTH,
-                    height: GAME_HEIGHT,
-                    backgroundColor: 0x1a1a1a, // Dark background
-                    antialias: true,
-                    autoDensity: true, // Adjust for device pixel ratio
+                // Initialize the application asynchronously
+                // Wait for the app to be ready before adding it to the DOM
+                app.init({
+                    width: 800,       // Desired width
+                    height: 600,      // Desired height
+                    backgroundColor: 0x1099bb, // Example background color
                     resolution: window.devicePixelRatio || 1,
+                    autoDensity: true // Handles high-density displays
+                }).then(() => {
+                    // Append the PixiJS canvas to the container
+                    gameContainer.appendChild(app.view);
+                    console.log("PixiJS Initialized Successfully.");
+
+                    // Now that PixiJS is initialized, load assets
+                    loadAssets();
+
+                }).catch(initError => {
+                     // Catch errors during app.init()
+                     displayError(`Error initializing PixiJS view: ${initError.message}`);
+                     console.error("Initialization Error Details:", initError);
                 });
 
-                // Append the Pixi canvas to the document body
-                document.body.appendChild(app.view);
-                console.log("PixiJS Application created and view added successfully.");
-
-                // Resize listener to keep canvas centered and scaled
-                window.addEventListener('resize', resizeCanvas);
-                resizeCanvas(); // Initial resize
-
-            } catch (err) {
-                console.error("Error initializing PixiJS:", err);
-                errorMessage.textContent = `Error initializing graphics: ${err.message}`;
-                // Handle critical initialization error (e.g., show an error message)
+            } catch (error) {
+                // Catch synchronous errors during new PIXI.Application() or setup
+                displayError(`Error setting up PixiJS Application: ${error.message}`);
+                console.error("Setup Error Details:", error);
             }
         }
 
         // --- Asset Loading ---
-        async function loadAssets(audioFile, jsonFile) {
-            if (!audioFile || !jsonFile) {
-                errorMessage.textContent = "Please select both an audio file and a JSON chart file.";
-                return;
+        function loadAssets() {
+            // Check if PIXI.sound exists before trying to use it
+            if (typeof PIXI.sound === 'undefined') {
+                displayError("Error: PIXI.sound is not available. Check library loading order.");
+                return; // Stop asset loading if sound library is missing
             }
 
-            // Show loading screen
-            startScreen.style.display = 'none';
-            loadingScreen.style.display = 'flex';
-            errorMessage.textContent = ''; // Clear previous errors
-            loadingBar.style.width = '0%';
-            loadingStatus.textContent = 'Reading files...';
-
+            // Example: Check if a sound alias exists (if you were loading sounds)
+            // This is just a placeholder - replace with your actual asset loading
             try {
-                // 1. Read JSON file
-                loadingStatus.textContent = 'Reading chart file...';
-                const jsonText = await readFileAsText(jsonFile);
-                chartData = JSON.parse(jsonText); // Basic validation: Will throw error if invalid JSON
-                console.log("Chart data loaded:", chartData);
-                loadingBar.style.width = '25%';
+                // Example: PIXI.Assets.add('mySound', 'path/to/sound.mp3');
+                // Example: PIXI.Assets.add('myTexture', 'path/to/image.png');
 
-                 // 2. Read and Decode Audio File using Web Audio API (for precise timing)
-                loadingStatus.textContent = 'Decoding audio file...';
-                const arrayBuffer = await readFileAsArrayBuffer(audioFile);
-                // Lazy initialize AudioContext on user interaction (required by browsers)
-                if (!audioContext) {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                }
-                audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                console.log("Audio data decoded successfully.");
-                loadingBar.style.width = '75%';
+                console.log("Attempting to load assets...");
 
-
-                // 3. Load audio into Pixi Sound (for easy playback control)
-                // Use the already read ArrayBuffer to avoid reading the file again
-                loadingStatus.textContent = 'Loading audio into sound engine...';
-                // Give the sound a unique alias using the file name
-                const audioAlias = `game_audio_${audioFile.name}`;
-                // Check if sound already exists (e.g., reloading)
-                if (PIXI.sound.exists(audioAlias)) {
-                     PIXI.sound.remove(audioAlias); // Remove previous version if reloading
-                }
-                // Add the sound using the ArrayBuffer
-                soundInstance = PIXI.sound.add(audioAlias, {
-                    source: arrayBuffer, // Use the ArrayBuffer directly
-                    preload: true, // Ensure it's ready
-                    volume: 0.7, // Default volume
-                    load: (err) => { // Callback on load completion/error
-                        if (err) {
-                            console.error("Pixi Sound load error:", err);
-                            errorMessage.textContent = `Error loading sound: ${err.message || err}`;
-                            loadingScreen.style.display = 'none'; // Hide loading
-                            startScreen.style.display = 'flex'; // Show start screen again
-                            return;
-                        }
-                        console.log("Pixi Sound loaded successfully:", audioAlias);
-                        loadingBar.style.width = '100%';
-                        loadingStatus.textContent = 'Assets loaded!';
-
-                        // Store assets for game use
-                        gameAssets = {
-                            audio: soundInstance,
-                            chart: chartData
-                        };
-
-                        // Hide loading screen, show game screen elements (like a start button)
-                        loadingScreen.style.display = 'none';
-                        // Don't show the main game screen yet, show the start button
-                        gameScreen.style.display = 'flex'; // Show the container for the start button
-                        statusMessage.textContent = 'Assets loaded. Click Start Game!'; // Update status on start screen (though it's hidden)
-                    }
+                // Use PIXI.Assets for loading
+                PIXI.Assets.load([
+                    // Add your asset paths here
+                    // e.g., 'assets/sprite.png',
+                    // e.g., 'assets/background.jpg',
+                    // e.g., { alias: 'coinSound', src: 'assets/coin.wav' }
+                ]).then((resources) => {
+                    console.log("Assets loaded successfully:", resources);
+                    // Assets are loaded, proceed to game setup
+                    setupGameScene(resources);
+                }).catch(loadError => {
+                    displayError(`Error loading assets: ${loadError.message}`);
+                    console.error("Asset Loading Error Details:", loadError);
                 });
-
 
             } catch (error) {
-                console.error("Error loading assets:", error);
-                errorMessage.textContent = `Error loading assets: ${error.message}`;
-                loadingScreen.style.display = 'none'; // Hide loading
-                startScreen.style.display = 'flex'; // Show start screen again
+                displayError(`Error during asset loading setup: ${error.message}`);
+                console.error("Asset Setup Error Details:", error);
             }
         }
 
-        // Helper function to read file as ArrayBuffer
-        function readFileAsArrayBuffer(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = (error) => reject(error);
-                reader.readAsArrayBuffer(file);
-            });
-        }
+        // --- Game Scene Setup ---
+        function setupGameScene(resources) {
+            console.log("Setting up game scene...");
+            // Add your game objects, sprites, text, etc., to the stage
+            // Example:
+            const basicText = new PIXI.Text({ text: 'Game Ready!', style: { fill: 'white' }});
+            basicText.x = 50;
+            basicText.y = 50;
+            app.stage.addChild(basicText);
 
-        // Helper function to read file as text
-        function readFileAsText(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = (error) => reject(error);
-                reader.readAsText(file);
-            });
-        }
+            // Example using a loaded texture (if you loaded one)
+            // if (resources.myTexture) {
+            //    const sprite = new PIXI.Sprite(resources.myTexture);
+            //    sprite.x = app.screen.width / 2;
+            //    sprite.y = app.screen.height / 2;
+            //    sprite.anchor.set(0.5);
+            //    app.stage.addChild(sprite);
+            // }
 
+            // Example playing a loaded sound (if you loaded one)
+            // if (PIXI.sound.exists('coinSound')) { // Check before playing
+            //    PIXI.sound.play('coinSound');
+            // }
 
-        // --- Game Logic ---
-        function showGameScreen() {
-            console.log("Showing Game Screen");
-            startScreen.style.display = 'none';
-            loadingScreen.style.display = 'none';
-            gameScreen.style.display = 'none'; // Hide the HTML UI container for game screen
-
-            // Clear any previous game elements from Pixi stage
-            app.stage.removeChildren();
-
-            // --- Add placeholder game elements ---
-            // Example: Add a simple text message
-            const style = new PIXI.TextStyle({
-                fontFamily: 'Arial',
-                fontSize: 36,
-                fill: '#ffffff', // White color
-                align: 'center',
-            });
-            const message = new PIXI.Text('Game Screen - Placeholder', style);
-            message.anchor.set(0.5); // Center the text
-            message.x = app.screen.width / 2;
-            message.y = app.screen.height / 2;
-            app.stage.addChild(message);
-
-             // Example: Add a background color rectangle (if not using app background)
-            // const background = new PIXI.Graphics();
-            // background.fill(0x333333); // Dark gray
-            // background.rect(0, 0, app.screen.width, app.screen.height);
-            // background.fill();
-            // app.stage.addChild(background); // Add background first
-
-            // TODO: Implement actual game setup using gameAssets.audio and gameAssets.chart
-            // - Create note objects based on chartData
-            // - Set up hit zones/targets
-            // - Start the game loop (app.ticker)
-            // - Play the audio (gameAssets.audio.play()) - possibly with an offset from chartData
-
-            // Start the game loop (ticker) if needed
+            // Start the game loop (if you have one)
             // app.ticker.add(gameLoop);
-
-             // Play the sound
-             if (gameAssets && gameAssets.audio) {
-                console.log("Attempting to play sound...");
-                gameAssets.audio.play({
-                    start: 0, // Start from the beginning (adjust with chart offset later)
-                    // Consider adding offset from chartData if available
-                    // start: chartData.offset || 0
-                });
-             } else {
-                 console.warn("Sound instance not available to play.");
-             }
+            console.log("Game scene setup complete.");
         }
 
-        // Example Game Loop function (will be expanded)
+        // --- Game Loop (Optional) ---
         // function gameLoop(ticker) {
-        //     const delta = ticker.deltaTime; // Time elapsed since last frame
-        //     // Update game state, move notes, check for hits, etc.
+        //     // Update game logic, move sprites, etc.
+        //     // console.log(`Delta time: ${ticker.deltaTime}`);
         // }
 
+        // --- Start the process ---
+        // Use window.onload to ensure the DOM is fully loaded before starting
+        window.onload = () => {
+             console.log("Window loaded. Initializing game...");
+             initializeGame();
+        };
 
-        // --- Canvas Resizing ---
-        function resizeCanvas() {
-            if (!app) return; // Exit if Pixi app isn't initialized yet
-
-            const windowWidth = window.innerWidth;
-            const windowHeight = window.innerHeight;
-
-            // Calculate the best fit scale
-            const scale = Math.min(windowWidth / GAME_WIDTH, windowHeight / GAME_HEIGHT);
-
-            // Determine the new size of the renderer
-            const newWidth = GAME_WIDTH * scale;
-            const newHeight = GAME_HEIGHT * scale;
-
-            // Resize the renderer view
-            app.renderer.view.style.width = `${newWidth}px`;
-            app.renderer.view.style.height = `${newHeight}px`;
-
-            // Center the canvas
-            app.renderer.view.style.position = 'absolute';
-            app.renderer.view.style.left = `${(windowWidth - newWidth) / 2}px`;
-            app.renderer.view.style.top = `${(windowHeight - newHeight) / 2}px`;
-
-            // Optional: If using autoDensity, you might not need to resize the renderer itself,
-            // but resizing the view style is usually sufficient for scaling.
-            // app.renderer.resize(GAME_WIDTH, GAME_HEIGHT); // Keep internal resolution fixed
-
-            console.log(`Resized canvas view to: ${newWidth}x${newHeight}`);
-        }
-
-        // --- Event Listeners ---
-        loadButton.addEventListener('click', () => {
-            // Ensure AudioContext is resumed (required by browser policies)
-            if (audioContext && audioContext.state === 'suspended') {
-                audioContext.resume().then(() => {
-                     console.log("AudioContext resumed successfully.");
-                     loadAssets(audioFileInput.files[0], jsonFileInput.files[0]);
-                }).catch(err => {
-                    console.error("Failed to resume AudioContext:", err);
-                    errorMessage.textContent = "Could not start audio. Please interact with the page again.";
-                });
-            } else if (!audioContext) {
-                 // Initialize AudioContext if it doesn't exist yet
-                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                 audioContext.resume().then(() => { // Resume immediately after creation
-                     console.log("AudioContext initialized and resumed.");
-                     loadAssets(audioFileInput.files[0], jsonFileInput.files[0]);
-                 }).catch(err => {
-                    console.error("Failed to initialize/resume AudioContext:", err);
-                    errorMessage.textContent = "Could not initialize audio. Please try again.";
-                 });
+        // Optional: Handle window resizing
+        window.addEventListener('resize', () => {
+            if (app && app.renderer) {
+                 // Example resize logic (might need adjustment based on your layout)
+                 // You might want to resize the renderer and reposition elements
+                 // app.renderer.resize(window.innerWidth, window.innerHeight);
+                 console.log("Window resized. You may need to adjust game elements.");
             }
-             else {
-                 // AudioContext exists and is running
-                 loadAssets(audioFileInput.files[0], jsonFileInput.files[0]);
-            }
-        });
-
-        startGameButton.addEventListener('click', () => {
-            // Ensure AudioContext is resumed before starting game/sound
-             if (audioContext && audioContext.state === 'suspended') {
-                audioContext.resume().then(() => {
-                     console.log("AudioContext resumed successfully before starting game.");
-                     showGameScreen();
-                }).catch(err => {
-                    console.error("Failed to resume AudioContext before game start:", err);
-                    errorMessage.textContent = "Could not start audio. Please interact with the page again.";
-                     // Optionally, re-show the start button or provide feedback
-                    gameScreen.style.display = 'flex'; // Ensure button is visible if audio fails
-                });
-            } else if (!audioContext) {
-                 console.error("AudioContext not initialized before trying to start game.");
-                 errorMessage.textContent = "Audio system not ready. Please reload assets.";
-                 // Optionally, re-show the start button or provide feedback
-                 gameScreen.style.display = 'flex'; // Ensure button is visible if audio fails
-            }
-            else {
-                 // AudioContext exists and is running
-                 showGameScreen();
-            }
-        });
-
-
-        // --- Wait for DOM and Initialize ---
-        document.addEventListener('DOMContentLoaded', async () => {
-            statusMessage.textContent = 'Initializing graphics...';
-            await initializePixi(); // Initialize PixiJS first
-            if (app) {
-                 statusMessage.textContent = 'Ready. Select files and click Load.';
-            } else {
-                 statusMessage.textContent = 'Error initializing graphics. Check console.';
-            }
-            // Ensure only start screen is visible initially
-            startScreen.style.display = 'flex';
-            loadingScreen.style.display = 'none';
-            gameScreen.style.display = 'none';
         });
 
     </script>
