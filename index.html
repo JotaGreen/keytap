@@ -3,58 +3,383 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eruda Toggle Example</title>
+    <title>Keytap - Scrolling Staff</title>
     <style>
-        /* Optional: Style the toggle button */
-        #eruda-toggle-btn {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            padding: 10px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            z-index: 9999;
+        /* Basic styling for the page */
+        body {
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars on the body */
+            background-color: #f0f0f0; /* Light grey background */
+            font-family: sans-serif; /* Simple sans-serif font */
+            display: flex;
+            justify-content: center; /* Center container horizontally */
+            align-items: center; /* Center container vertically */
+            min-height: 100vh; /* Ensure body takes full viewport height */
+            flex-direction: column; /* Stack container vertically */
         }
-        #eruda-toggle-btn:hover {
-            background-color: #0056b3;
+        /* Container for canvas and button */
+        #staffContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 90%; /* Control overall width */
+            max-width: 1200px; /* Optional max width */
+        }
+        /* Styling for the canvas element */
+        canvas {
+            background-color: #ffffff; /* White background for the staff */
+            display: block; /* Remove extra space below canvas */
+            border: 1px solid #ccc; /* Light grey border */
+            width: 100%; /* Canvas takes full width of container */
+            /* Height is set precisely by JS via canvas.height and canvas.style.height */
+            box-sizing: border-box;
+            cursor: grab; /* Indicate draggable when paused */
+            touch-action: none; /* Prevent default touch actions like scrolling when dragging */
+        }
+        canvas.dragging {
+             cursor: grabbing; /* Change cursor during drag */
+        }
+        /* Container for buttons */
+        #controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px; /* Space between buttons */
+        }
+        /* Styling for the buttons */
+        .control-button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            border: 1px solid #888;
+            background-color: #e0e0e0;
+        }
+        .control-button:hover {
+            background-color: #d0d0d0;
         }
     </style>
+    <script src="//cdn.jsdelivr.net/npm/eruda"></script>
+    <script src="https://raw.githubusercontent.com/JotaGreen/keytap/refs/heads/main/midiColorConverter.js"></script>
 </head>
 <body>
-    <!-- Your page content -->
-    <h1>My Webpage</h1>
-    <p>This is a sample page with Eruda and a toggle button.</p>
+    <div id="staffContainer">
+        <canvas id="staffCanvas"></canvas>
+        <div id="controls">
+            <button id="playPauseButton" class="control-button">Play</button>
+            <button id="colorToggleButton" class="control-button">Use Colors</button>
+        </div>
+    </div>
 
-    <!-- Toggle button for Eruda -->
-    <button id="eruda-toggle-btn">Toggle Eruda</button>
-
-    <!-- Include Eruda script -->
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>
-        // Initialize Eruda
-        eruda.init();
+        console.log("Keytap script starting execution.");
 
-        // Hide Eruda by default (optional)
-        eruda.hide();
+        // --- Configuration Constants ---
+        const SCROLL_SPEED_PIXELS_PER_SECOND = 100;
+        const PRE_DELAY_SECONDS = 1.0;
+        const STAFF_LINE_COLOR = '#000000';
+        const NOTE_COLOR = '#333333'; // Default note color
+        const ACCIDENTAL_COLOR = '#888888'; // Gray for accidentals
+        const STAFF_LINE_WIDTH = 1; // Base line width
+        const NOTE_CORNER_RADIUS = 3;
+        const LINE_SPACING = 12;
+        const STAFF_PADDING = LINE_SPACING * 2;
+        const JUDGMENT_LINE_COLOR = '#FF0000';
+        const JUDGMENT_LINE_WIDTH = 2; // Base line width
+        const JUDGMENT_LINE_X_PERCENT = 20;
+        const MIDI_NOTE_MIN = 36; // C2
+        const MIDI_NOTE_MAX = 84; // C6
+        const ACCIDENTAL_OFFSET_X = -10;
+        const ACCIDENTAL_FONT_SIZE = LINE_SPACING * 1.2;
+        const LEDGER_LINE_EXTENSION = 4;
+        const LEDGER_LINE_WIDTH = 1; // Base line width
+        const MIN_DISPLAY_TIME = 0.0;
 
-        // Get the toggle button
-        const toggleBtn = document.getElementById('eruda-toggle-btn');
-        let isErudaVisible = false;
+        // --- DOM Elements ---
+        const container = document.getElementById('staffContainer');
+        const canvas = document.getElementById('staffCanvas');
+        const playPauseButton = document.getElementById('playPauseButton');
+        const colorToggleButton = document.getElementById('colorToggleButton');
 
-        // Toggle Eruda visibility on button click
-        toggleBtn.addEventListener('click', () => {
-            if (isErudaVisible) {
-                eruda.hide();
-                toggleBtn.textContent = 'Show Eruda';
-            } else {
-                eruda.show();
-                toggleBtn.textContent = 'Hide Eruda';
+        // --- Canvas Setup ---
+        if (!canvas || !playPauseButton || !container || !colorToggleButton) { console.error("Fatal Error: Required DOM element not found!"); }
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { console.error("Fatal Error: Could not get 2D rendering context!"); }
+        const devicePixelRatio = window.devicePixelRatio || 1;
+        console.log(`Device Pixel Ratio: ${devicePixelRatio}`);
+
+        let canvasWidth = 300; // Logical display width
+        let canvasHeight = 150; // Logical display height (will be precisely calculated)
+        let judgmentLineX; // Logical X position
+
+        // --- Staff Geometry & Note Position Mapping ---
+        console.log("Calculating staff line Y positions and note mappings...");
+        const HALF_LINE_SPACING = LINE_SPACING / 2;
+        let totalStaffHeight = 150;
+        const staffPositions = {};
+        let diatonicNoteYPositions = {};
+        const midiToDiatonicDegree = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
+
+        function setupStaffAndNotes() {
+            let currentY_rel = 0; const staffPositions_rel = {};
+            staffPositions_rel.F5 = currentY_rel; staffPositions_rel.E5 = staffPositions_rel.F5 + HALF_LINE_SPACING; staffPositions_rel.D5 = staffPositions_rel.F5 + LINE_SPACING; staffPositions_rel.C5 = staffPositions_rel.D5 + HALF_LINE_SPACING; staffPositions_rel.B4 = staffPositions_rel.D5 + LINE_SPACING; staffPositions_rel.A4 = staffPositions_rel.B4 + HALF_LINE_SPACING; staffPositions_rel.G4 = staffPositions_rel.B4 + LINE_SPACING; staffPositions_rel.F4 = staffPositions_rel.G4 + HALF_LINE_SPACING; staffPositions_rel.E4 = staffPositions_rel.G4 + LINE_SPACING; staffPositions_rel.D4 = staffPositions_rel.E4 + HALF_LINE_SPACING; staffPositions_rel.C4 = staffPositions_rel.E4 + LINE_SPACING; staffPositions_rel.B3 = staffPositions_rel.C4 + HALF_LINE_SPACING; staffPositions_rel.A3 = staffPositions_rel.C4 + LINE_SPACING; staffPositions_rel.G3 = staffPositions_rel.A3 + HALF_LINE_SPACING; staffPositions_rel.F3 = staffPositions_rel.A3 + LINE_SPACING; staffPositions_rel.E3 = staffPositions_rel.F3 + HALF_LINE_SPACING; staffPositions_rel.D3 = staffPositions_rel.F3 + LINE_SPACING; staffPositions_rel.C3 = staffPositions_rel.D3 + HALF_LINE_SPACING; staffPositions_rel.B2 = staffPositions_rel.D3 + LINE_SPACING; staffPositions_rel.A2 = staffPositions_rel.B2 + HALF_LINE_SPACING; staffPositions_rel.G2 = staffPositions_rel.B2 + LINE_SPACING;
+
+            const noteNames = ["C", "D", "E", "F", "G", "A", "B"];
+            const midiRef = 60; const yRef_rel = staffPositions_rel.C4;
+            diatonicNoteYPositions = {};
+            let minY_rel = Infinity, maxY_rel = -Infinity;
+
+            for (let midi = MIDI_NOTE_MIN; midi <= MIDI_NOTE_MAX; midi++) {
+                const octave = Math.floor(midi / 12) - 1; const noteIndex = midi % 12;
+                const diatonicDegree = midiToDiatonicDegree[noteIndex];
+                const referenceOctave = Math.floor(midiRef / 12) - 1; const octaveDifference = octave - referenceOctave;
+                const stepsFromRefDegree = diatonicDegree - midiToDiatonicDegree[midiRef % 12];
+                const totalDiatonicSteps = octaveDifference * 7 + stepsFromRefDegree;
+                const yPos_rel = yRef_rel - (totalDiatonicSteps * HALF_LINE_SPACING);
+                const baseNoteLetter = noteNames[diatonicDegree]; const baseNoteName = baseNoteLetter + octave;
+                if (!(baseNoteName in diatonicNoteYPositions)) { diatonicNoteYPositions[baseNoteName] = yPos_rel; minY_rel = Math.min(minY_rel, yPos_rel); maxY_rel = Math.max(maxY_rel, yPos_rel); }
             }
-            isErudaVisible = !isErudaVisible;
-        });
+            console.log("Relative diatonic note Y positions calculated.");
+
+            const noteHeight = LINE_SPACING;
+            const topNoteEdgeY_rel = minY_rel - (noteHeight / 2); const bottomNoteEdgeY_rel = maxY_rel + (noteHeight / 2);
+            totalStaffHeight = (bottomNoteEdgeY_rel - topNoteEdgeY_rel) + (STAFF_PADDING * 2);
+            totalStaffHeight = Math.max(100, totalStaffHeight);
+            const yOffset = STAFF_PADDING - topNoteEdgeY_rel;
+
+            for (const key in staffPositions_rel) { const absKey = key.replace('_rel', ''); staffPositions[absKey] = staffPositions_rel[key] + yOffset; }
+            for (const key in diatonicNoteYPositions) { diatonicNoteYPositions[key] += yOffset; }
+
+            console.log(`Precise Total Staff Logical Height Calculated: ${totalStaffHeight.toFixed(1)}px`);
+        }
+        setupStaffAndNotes();
+
+        // --- Note Data Storage ---
+        let noteMap = null; let notesToDraw = [];
+
+        // --- State Variables ---
+        let isRunning = false; let animationFrameId = null;
+        let displayTime = PRE_DELAY_SECONDS; let lastTimestamp = 0;
+        let isDragging = false; let dragStartX = 0; let dragStartTime = 0;
+        let useColoredNotes = false; // Start with black notes by default
+
+        // --- Note Y Position Lookup Function ---
+        function getNoteYPosition(noteName) {
+            const baseNameMatch = noteName.match(/([A-G])[#b]?(\d)/);
+            if (baseNameMatch) {
+                const baseName = baseNameMatch[1] + baseNameMatch[2];
+                const yPosition = diatonicNoteYPositions[baseName];
+                if (yPosition !== undefined) { return yPosition; }
+                else { console.error(`Lookup Failure: Base name "${baseName}" (from "${noteName}") not in map!`); return null; }
+            } else { console.warn(`Could not parse base note: ${noteName}`); return null; }
+        }
+
+        // --- Drawing Functions ---
+        function drawStaffLine(y) { /* ... no changes ... */
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvasWidth, y);
+            ctx.lineWidth = STAFF_LINE_WIDTH;
+            ctx.strokeStyle = STAFF_LINE_COLOR;
+            ctx.stroke();
+        }
+        function drawGrandStaff() { /* ... uses absolute staffPositions ... */ drawStaffLine(staffPositions.E4); drawStaffLine(staffPositions.G4); drawStaffLine(staffPositions.B4); drawStaffLine(staffPositions.D5); drawStaffLine(staffPositions.F5); drawStaffLine(staffPositions.G2); drawStaffLine(staffPositions.B2); drawStaffLine(staffPositions.D3); drawStaffLine(staffPositions.F3); drawStaffLine(staffPositions.A3); }
+        function drawRoundedRect(x, y, width, height, radius) { /* ... no changes ... */
+            if (width < 2 * radius) radius = width / 2; if (height < 2 * radius) radius = height / 2;
+            if (width <= 0 || height <= 0) return;
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.arcTo(x + width, y, x + width, y + height, radius);
+            ctx.arcTo(x + width, y + height, x, y + height, radius);
+            ctx.arcTo(x, y + height, x, y, radius);
+            ctx.arcTo(x, y, x + width, y, radius);
+            ctx.closePath();
+            ctx.fill();
+        }
+        function drawLedgerLines(note, x, noteWidth) { /* ... uses absolute staffPositions ... */
+            const y = note.y; if (y === null) return;
+            const checkTolerance = HALF_LINE_SPACING / 2;
+            ctx.lineWidth = LEDGER_LINE_WIDTH;
+            ctx.strokeStyle = STAFF_LINE_COLOR;
+            const ledgerXStart = x - LEDGER_LINE_EXTENSION;
+            const ledgerXEnd = x + noteWidth + LEDGER_LINE_EXTENSION;
+            if (y < staffPositions.F5 - checkTolerance) { for (let lineY = staffPositions.F5 - LINE_SPACING; lineY >= y - checkTolerance; lineY -= LINE_SPACING) { ctx.beginPath(); ctx.moveTo(ledgerXStart, lineY); ctx.lineTo(ledgerXEnd, lineY); ctx.stroke(); } }
+            if (Math.abs(y - staffPositions.C4) < checkTolerance) { ctx.beginPath(); ctx.moveTo(ledgerXStart, staffPositions.C4); ctx.lineTo(ledgerXEnd, staffPositions.C4); ctx.stroke(); }
+            if (y > staffPositions.G2 + checkTolerance) { for (let lineY = staffPositions.G2 + LINE_SPACING; lineY <= y + checkTolerance; lineY += LINE_SPACING) { ctx.beginPath(); ctx.moveTo(ledgerXStart, lineY); ctx.lineTo(ledgerXEnd, lineY); ctx.stroke(); } }
+        }
+        function drawAccidental(note, x) { /* ... no changes ... */
+            const accidental = note.name.includes('#') ? '♯' : note.name.includes('b') ? '♭' : null;
+            if (accidental) {
+                if (note.y === null || note.y === undefined) { return; }
+                ctx.fillStyle = ACCIDENTAL_COLOR;
+                ctx.font = `${ACCIDENTAL_FONT_SIZE}px sans-serif`;
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                const accidentalX = x + ACCIDENTAL_OFFSET_X;
+                const accidentalY = note.y;
+                ctx.fillText(accidental, accidentalX, accidentalY);
+            }
+        }
+        function drawNote(note, timeToDisplay) { /* ... Corrected fillStyle application ... */
+            if (note.y === null || note.y === undefined) { return; }
+            const noteY = note.y;
+            const timeUntilJudgment = note.time - timeToDisplay;
+            const noteX = judgmentLineX + (timeUntilJudgment * SCROLL_SPEED_PIXELS_PER_SECOND);
+            const noteWidth = note.duration * SCROLL_SPEED_PIXELS_PER_SECOND;
+            const noteHeight = LINE_SPACING;
+
+            let currentNoteColor = NOTE_COLOR; // Start with default
+            if (useColoredNotes) {
+                if (typeof getMidiNoteColor === 'function') {
+                    try {
+                        const rgbArray = getMidiNoteColor(note.midi);
+                        if (rgbArray && rgbArray.length === 3) {
+                            currentNoteColor = `rgb(${rgbArray[0]}, ${rgbArray[1]}, ${rgbArray[2]})`;
+                        } else {
+                             console.warn(`Invalid color array received for MIDI ${note.midi}:`, rgbArray);
+                             currentNoteColor = NOTE_COLOR; // Fallback
+                        }
+                    } catch (e) {
+                        console.error(`Error calling getMidiNoteColor for MIDI ${note.midi}:`, e);
+                        currentNoteColor = NOTE_COLOR;
+                    }
+                } else {
+                    if (!window.midiColorFuncChecked) {
+                        console.warn("getMidiNoteColor function not found. Using default note color.");
+                        window.midiColorFuncChecked = true;
+                    }
+                    currentNoteColor = NOTE_COLOR;
+                }
+            }
+
+            if (noteX < canvasWidth && (noteX + noteWidth) > 0) { // Culling check
+                drawLedgerLines(note, noteX, noteWidth);
+                // *** Set fillStyle *before* drawing the rectangle ***
+                ctx.fillStyle = currentNoteColor;
+                drawRoundedRect(noteX, noteY - noteHeight / 2, noteWidth, noteHeight, NOTE_CORNER_RADIUS);
+                // Draw accidental after note body
+                drawAccidental(note, noteX);
+            }
+        }
+        function drawJudgmentLine() { /* ... no changes ... */
+             ctx.beginPath();
+             ctx.moveTo(judgmentLineX, 0);
+             ctx.lineTo(judgmentLineX, canvasHeight);
+             ctx.lineWidth = JUDGMENT_LINE_WIDTH;
+             ctx.strokeStyle = JUDGMENT_LINE_COLOR;
+             ctx.stroke();
+        }
+        function redrawCanvas(timeToDisplay) { /* ... no changes ... */
+            ctx.save();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.scale(devicePixelRatio, devicePixelRatio);
+            // ctx.imageSmoothingEnabled = false;
+
+            drawGrandStaff();
+            drawJudgmentLine();
+            if (notesToDraw.length > 0) {
+                notesToDraw.forEach(note => drawNote(note, timeToDisplay));
+            }
+
+            ctx.restore();
+        }
+
+        // --- Animation Loop ---
+        function animationLoop(timestamp) { /* ... no changes ... */
+            if (!isRunning) { animationFrameId = null; return; }
+            const currentTimeSeconds = timestamp / 1000.0;
+            const deltaTime = lastTimestamp > 0 ? currentTimeSeconds - lastTimestamp : 0;
+            displayTime += deltaTime;
+            lastTimestamp = currentTimeSeconds;
+            redrawCanvas(displayTime);
+            animationFrameId = requestAnimationFrame(animationLoop);
+        }
+
+        // --- Control Functions ---
+        function playAnimation() { /* ... no changes ... */ if (!isRunning) { console.log("Playing animation..."); isRunning = true; playPauseButton.textContent = "Pause"; canvas.style.cursor = 'default'; lastTimestamp = performance.now() / 1000.0; if (!animationFrameId) { animationFrameId = requestAnimationFrame(animationLoop); } } }
+        function pauseAnimation() { /* ... no changes ... */ if (isRunning) { console.log("Pausing animation..."); isRunning = false; playPauseButton.textContent = "Play"; canvas.style.cursor = 'grab'; } }
+        function togglePlayPause() { /* ... no changes ... */ if (isRunning) { pauseAnimation(); } else { playAnimation(); } }
+
+        function toggleNoteColors() {
+            useColoredNotes = !useColoredNotes;
+            colorToggleButton.textContent = useColoredNotes ? "Use Black" : "Use Colors";
+            console.log(`Note colors toggled. Using colored notes: ${useColoredNotes}`);
+            redrawCanvas(displayTime);
+        }
+
+        // --- Event Handlers ---
+        function handleResize() { /* ... no changes ... */
+            console.log("Handling resize...");
+            const displayWidth = container.offsetWidth;
+            const displayHeight = totalStaffHeight;
+            canvasWidth = displayWidth;
+            canvasHeight = displayHeight;
+            canvas.width = Math.round(displayWidth * devicePixelRatio);
+            canvas.height = Math.round(displayHeight * devicePixelRatio);
+            canvas.style.width = `${displayWidth}px`;
+            canvas.style.height = `${displayHeight}px`;
+            judgmentLineX = canvasWidth * (JUDGMENT_LINE_X_PERCENT / 100);
+            console.log(`Canvas resized - Display: ${displayWidth.toFixed(0)}x${displayHeight.toFixed(1)}px, Buffer: ${canvas.width}x${canvas.height}px`);
+            redrawCanvas(displayTime);
+        }
+
+        function getEventX(event) { /* ... no changes ... */ return event.touches ? event.touches[0].clientX : event.clientX; }
+        function handleDragStart(event) { /* ... no changes ... */ if (!isRunning) { isDragging = true; dragStartX = getEventX(event) - canvas.getBoundingClientRect().left; dragStartTime = displayTime; canvas.classList.add('dragging'); event.preventDefault(); } }
+        function handleDragMove(event) { /* ... no changes ... */ if (isDragging) { const currentX = getEventX(event) - canvas.getBoundingClientRect().left; const deltaX = currentX - dragStartX; const deltaTimeOffset = deltaX / SCROLL_SPEED_PIXELS_PER_SECOND; displayTime = Math.max(MIN_DISPLAY_TIME, dragStartTime - deltaTimeOffset); redrawCanvas(displayTime); event.preventDefault(); } }
+        function handleDragEnd(event) { /* ... no changes ... */ if (isDragging) { isDragging = false; canvas.classList.remove('dragging'); event.preventDefault(); } }
+
+        // --- Initialization ---
+        async function loadNoteData() { /* ... no changes ... */
+             console.log("Loading note data...");
+             try {
+                  const jsonData = { "header": {}, "tracks": [ { "channel": 0, "instrument": {}, "name": "Instrument", "notes": [
+                         {"duration": 0.4486, "midi": 36, "name": "C2", "time": 1.6477, "velocity": 0.78}, {"duration": 0.3334, "midi": 37, "name": "C#2", "time": 2.0962, "velocity": 0.78}, {"duration": 0.3837, "midi": 38, "name": "D2", "time": 2.4295, "velocity": 0.78}, {"duration": 0.2672, "midi": 39, "name": "D#2", "time": 2.8132, "velocity": 0.78}, {"duration": 0.3000, "midi": 40, "name": "E2", "time": 3.0804, "velocity": 0.78}, {"duration": 0.2671, "midi": 41, "name": "F2", "time": 3.3804, "velocity": 0.78}, {"duration": 0.2500, "midi": 42, "name": "F#2", "time": 3.6475, "velocity": 0.78}, {"duration": 0.3338, "midi": 43, "name": "G2", "time": 3.8974, "velocity": 0.78}, {"duration": 0.2335, "midi": 44, "name": "G#2", "time": 4.2313, "velocity": 0.78}, {"duration": 0.3503, "midi": 45, "name": "A2", "time": 4.4647, "velocity": 0.78}, {"duration": 0.1835, "midi": 46, "name": "A#2", "time": 4.8150, "velocity": 0.78}, {"duration": 0.2831, "midi": 47, "name": "B2", "time": 4.9984, "velocity": 0.78}, {"duration": 0.2984, "midi": 48, "name": "C3", "time": 5.8509, "velocity": 0.78}, {"duration": 0.1501, "midi": 49, "name": "C#3", "time": 6.1493, "velocity": 0.78}, {"duration": 0.3166, "midi": 50, "name": "D3", "time": 6.2994, "velocity": 0.78}, {"duration": 0.1673, "midi": 51, "name": "D#3", "time": 6.6160, "velocity": 0.78}, {"duration": 0.2670, "midi": 52, "name": "E3", "time": 6.7831, "velocity": 0.78}, {"duration": 0.2001, "midi": 53, "name": "F3", "time": 7.0501, "velocity": 0.78}, {"duration": 0.1669, "midi": 54, "name": "F#3", "time": 7.2502, "velocity": 0.78}, {"duration": 0.3330, "midi": 55, "name": "G3", "time": 7.4171, "velocity": 0.78}, {"duration": 0.1173, "midi": 56, "name": "G#3", "time": 7.7501, "velocity": 0.78}, {"duration": 0.3002, "midi": 57, "name": "A3", "time": 7.8674, "velocity": 0.78}, {"duration": 0.2002, "midi": 58, "name": "A#3", "time": 8.1676, "velocity": 0.78}, {"duration": 0.2003, "midi": 59, "name": "B3", "time": 8.3679, "velocity": 0.78}, {"duration": 0.2651, "midi": 60, "name": "C4", "time": 10.5714, "velocity": 0.78}, {"duration": 0.1504, "midi": 61, "name": "C#4", "time": 10.8364, "velocity": 0.78}, {"duration": 0.2498, "midi": 62, "name": "D4", "time": 10.9868, "velocity": 0.78}, {"duration": 0.1835, "midi": 63, "name": "D#4", "time": 11.2366, "velocity": 0.78}, {"duration": 0.2168, "midi": 64, "name": "E4", "time": 11.4201, "velocity": 0.78}, {"duration": 0.1004, "midi": 65, "name": "F4", "time": 11.6370, "velocity": 0.78}, {"duration": 0.2169, "midi": 66, "name": "F#4", "time": 11.7374, "velocity": 0.78}, {"duration": 0.2671, "midi": 67, "name": "G4", "time": 11.9542, "velocity": 0.78}, {"duration": 0.1661, "midi": 68, "name": "G#4", "time": 12.2213, "velocity": 0.78}, {"duration": 0.2673, "midi": 69, "name": "A4", "time": 12.3874, "velocity": 0.78}, {"duration": 0.1665, "midi": 70, "name": "A#4", "time": 12.6547, "velocity": 0.78}, {"duration": 0.2501, "midi": 71, "name": "B4", "time": 12.8212, "velocity": 0.78}, {"duration": 0.1990, "midi": 72, "name": "C5", "time": 14.4239, "velocity": 0.78}, {"duration": 0.1498, "midi": 73, "name": "C#5", "time": 14.6229, "velocity": 0.78}, {"duration": 0.2676, "midi": 74, "name": "D5", "time": 14.7726, "velocity": 0.78}, {"duration": 0.1663, "midi": 75, "name": "D#5", "time": 15.0402, "velocity": 0.78}, {"duration": 0.2002, "midi": 76, "name": "E5", "time": 15.2065, "velocity": 0.78}, {"duration": 0.1002, "midi": 77, "name": "F5", "time": 15.4066, "velocity": 0.78}, {"duration": 0.2332, "midi": 78, "name": "F#5", "time": 15.5069, "velocity": 0.78}, {"duration": 0.2676, "midi": 79, "name": "G5", "time": 15.7401, "velocity": 0.78}, {"duration": 0.0830, "midi": 80, "name": "G#5", "time": 16.0076, "velocity": 0.78}, {"duration": 0.4173, "midi": 81, "name": "A5", "time": 16.0906, "velocity": 0.78}, {"duration": 0.1999, "midi": 82, "name": "A#5", "time": 16.5079, "velocity": 0.78}, {"duration": 0.2835, "midi": 83, "name": "B5", "time": 16.7078, "velocity": 0.78}, {"duration": 0.5, "midi": 84, "name": "C6", "time": 17.5, "velocity": 0.78} ] } ] };
+                 noteMap = jsonData; console.log("Note data loaded successfully.");
+                 if (noteMap && noteMap.tracks && noteMap.tracks.length > 0 && noteMap.tracks[0].notes) {
+                     // Reinstate the filter
+                     notesToDraw = noteMap.tracks[0].notes
+                         .map(note => ({ ...note, y: getNoteYPosition(note.name) }))
+                         .filter(note => note.y !== null);
+
+                     console.log(`Processed ${noteMap.tracks[0].notes.length} notes, ${notesToDraw.length} remain after filtering.`);
+                     if (notesToDraw.length > 0) {
+                        // console.log("Inspecting first 15 notes in FINAL notesToDraw array:");
+                        // notesToDraw.slice(0, 15).forEach((n, i) => {
+                        //     console.log(`  Note ${i}: name='${n.name}', midi=${n.midi}, y=${n.y?.toFixed(1)}`);
+                        // });
+                     }
+                     notesToDraw.sort((a, b) => a.time - b.time); console.log("Notes sorted by start time.");
+                 } else { console.error("Error: Note data format invalid."); notesToDraw = []; }
+             } catch (error) { console.error("Fatal Error loading note data:", error); notesToDraw = []; }
+         }
+
+        async function initialize() {
+            console.log("Initializing Keytap visualization...");
+            // Verify getMidiNoteColor function exists
+            if (typeof getMidiNoteColor === 'function') {
+                console.log("getMidiNoteColor function found.");
+            } else {
+                console.error("CRITICAL: getMidiNoteColor function NOT FOUND. External script might have failed to load or define it.");
+            }
+            try { if (typeof eruda !== 'undefined') { eruda.init(); console.log("Eruda initialized."); } else { console.warn("Eruda not found."); } } catch (e) { console.error("Failed to initialize Eruda:", e); }
+            // Staff geometry calculation is now done globally once
+            await loadNoteData();
+            handleResize(); // Set initial size based on container & calculated height
+            displayTime = PRE_DELAY_SECONDS;
+            redrawCanvas(displayTime); // Draw initial frame
+            // Add event listeners
+            window.addEventListener('resize', handleResize);
+            playPauseButton.addEventListener('click', togglePlayPause);
+            colorToggleButton.addEventListener('click', toggleNoteColors);
+            canvas.addEventListener('mousedown', handleDragStart); window.addEventListener('mousemove', handleDragMove); window.addEventListener('mouseup', handleDragEnd); canvas.addEventListener('mouseleave', handleDragEnd);
+            canvas.addEventListener('touchstart', handleDragStart, { passive: false }); window.addEventListener('touchmove', handleDragMove, { passive: false }); window.addEventListener('touchend', handleDragEnd); window.addEventListener('touchcancel', handleDragEnd);
+            console.log("Initialization complete. Ready to play.");
+        }
+
+        // --- Entry Point ---
+        // *** Use window.onload to ensure external scripts are loaded ***
+        window.addEventListener('load', initialize);
+        console.log("window.onload event listener added.");
+
     </script>
 </body>
 </html>
