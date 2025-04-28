@@ -2,467 +2,1185 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Keytap - Scrolling Staff</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Keytap - Game</title>
+    <script src="//cdn.jsdelivr.net/npm/eruda"></script>
+    <script src="https://cdn.jsdelivr.net/gh/JotaGreen/keytap@main/midiColorConverter.js"></script>
     <style>
-        /* Basic styling for the page */
-        body {
+        /* Apply border-box sizing globally for easier layout */
+        * {
+            box-sizing: border-box;
+            /* Disable user selection globally, can be re-enabled for specific elements if needed */
+            user-select: none;
+            -webkit-user-select: none; /* Safari */
+            -moz-user-select: none; /* Firefox */
+            -ms-user-select: none; /* IE */
+            /* Prevent callout menu on long press (iOS) */
+            -webkit-touch-callout: none;
+            /* Improve touch interaction responsiveness */
+            touch-action: manipulation; /* Allows pinch-zoom, prevents double-tap zoom */
+        }
+
+        /* Basic body styling */
+        html, body {
             margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
             overflow: hidden; /* Prevent scrollbars on the body */
             background-color: #f0f0f0; /* Light grey background */
             font-family: sans-serif; /* Simple sans-serif font */
-            display: flex;
-            justify-content: center; /* Center container horizontally */
-            align-items: center; /* Center container vertically */
-            min-height: 100vh; /* Ensure body takes full viewport height */
-            flex-direction: column; /* Stack container vertically */
+            /* Prevent pull-to-refresh and other unwanted touch behaviors */
+            overscroll-behavior: none;
         }
-        /* Container for canvas and button */
-        #staffContainer {
+
+        /* Main game container - Full viewport, column layout by default (portrait) */
+        #gameContainer {
+            width: 100%;
+            height: 100%;
             display: flex;
-            flex-direction: column;
+            flex-direction: column; /* Default to portrait layout */
+            background-color: #e0e0e0; /* Slightly darker grey for container */
+        }
+
+        /* --- Layout Sections --- */
+        #infoSection {
+            background-color: #d0d0d0; /* Slightly lighter grey */
+            padding: 5px 10px;
+            display: flex;
+            justify-content: space-between;
             align-items: center;
-            width: 90%; /* Control overall width */
-            max-width: 1200px; /* Optional max width */
+            flex-shrink: 0; /* Prevent shrinking */
+            border-bottom: 1px solid #b0b0b0;
+            overflow: hidden; /* Hide overflow */
         }
-        /* Styling for the canvas element */
-        canvas {
+
+        #staffSection {
+            background-color: #ffffff; /* White background for the staff area */
+            flex-grow: 1; /* Takes up remaining space in column layout */
+            overflow: hidden; /* Hide canvas overflow */
+            position: relative; /* Needed for canvas positioning/sizing */
+            display: flex; /* Use flex to center canvas */
+            justify-content: center;
+            align-items: center; /* Center canvas vertically */
+            border-bottom: 1px solid #b0b0b0; /* Add border for separation */
+        }
+
+        /* Container for bottom elements in landscape mode */
+        #bottomPanel {
+            display: flex; /* Will be row in landscape */
+            flex-shrink: 0;
+            /* Border is handled by staffSection bottom and infoSection right */
+        }
+
+        #keyboardSection {
+            background-color: #c0c0c0; /* Even lighter grey */
+            display: flex;
+            justify-content: center; /* Center the piano horizontally */
+            align-items: center; /* Center the piano vertically */
+            padding: 5px 0; /* Add some vertical padding */
+            flex-shrink: 0; /* Prevent shrinking */
+            overflow: hidden; /* Hide overflow */
+        }
+
+        /* --- Responsive Layout --- */
+
+        /* Portrait Mode (Default - Mobile First) */
+        #infoSection {
+            order: 1;
+            height: 25%; /* Top 1/4 */
+            border-bottom: 1px solid #b0b0b0; /* Ensure border exists */
+        }
+        #staffSection {
+            order: 2;
+            height: 50%; /* Middle 1/2 */
+            border-bottom: 1px solid #b0b0b0; /* Ensure border exists */
+        }
+        #bottomPanel { /* Contains only keyboard in portrait */
+            order: 3;
+            height: 25%; /* Bottom 1/4 */
+            border-top: none; /* Remove top border, staffSection has bottom border */
+            flex-direction: column; /* Stack elements vertically (only keyboard here) */
+        }
+         #keyboardSection {
+             width: 100%; /* Full width */
+             height: 100%; /* Full height of bottomPanel */
+             border-left: none; /* No side borders */
+         }
+
+
+        /* Landscape Mode */
+        @media (orientation: landscape) {
+            #gameContainer {
+                /* Still column overall: Staff on top, BottomPanel below */
+                flex-direction: column;
+            }
+
+            #staffSection {
+                order: 1; /* Staff comes first */
+                height: 66.66%; /* Top 2/3 */
+                width: 100%; /* Full width */
+                border-bottom: 1px solid #b0b0b0; /* Keep bottom border */
+            }
+
+            #bottomPanel {
+                order: 2; /* Panel comes second */
+                height: 33.33%; /* Bottom 1/3 */
+                width: 100%;
+                flex-direction: row; /* Arrange info and keyboard side-by-side */
+                border-top: none; /* Remove top border, staffSection has bottom border */
+            }
+
+             #infoSection {
+                order: 1; /* Info is inside bottom panel, comes first */
+                width: 50%; /* Left half of bottom panel */
+                height: 100%; /* Full height of bottom panel */
+                border-bottom: none; /* No bottom border */
+                border-right: 1px solid #b0b0b0; /* Add border between info and keyboard */
+            }
+
+            #keyboardSection {
+                order: 2; /* Keyboard is inside bottom panel, comes second */
+                width: 50%; /* Right half of bottom panel */
+                height: 100%; /* Full height of bottom panel */
+                padding: 10px 5px; /* Adjust padding */
+                border-left: none; /* Remove left border (infoSection has right border) */
+            }
+        }
+
+        /* --- Staff Canvas Styling --- */
+        #staffCanvas {
             background-color: #ffffff; /* White background for the staff */
             display: block; /* Remove extra space below canvas */
-            border: 1px solid #ccc; /* Light grey border */
-            width: 100%; /* Canvas takes full width of container */
-            /* Height is set precisely by JS via canvas.height and canvas.style.height */
+            /* Let container size it, but set max limits */
+            max-width: 100%;
+            max-height: 100%;
+            /* Border is now on the container (#staffSection) */
             box-sizing: border-box;
             cursor: grab; /* Indicate draggable when paused */
-            touch-action: none; /* Prevent default touch actions like scrolling when dragging */
         }
-        canvas.dragging {
+        #staffCanvas.dragging {
              cursor: grabbing; /* Change cursor during drag */
         }
-        /* Container for buttons */
-        #controls {
-            margin-top: 15px;
-            display: flex;
-            gap: 10px; /* Space between buttons */
+
+        /* --- Piano Keyboard Styling --- */
+        .piano {
+            display: flex; /* Use flexbox for key layout */
+            position: relative; /* Needed for positioning black keys */
+            padding: 0; /* No internal padding */
+            /* Let flexbox size it within keyboardSection */
+            width: 95%; /* Take most of the width */
+            height: 90%; /* Take most of the height */
+            max-width: 600px; /* Max width constraint */
+            max-height: 240px; /* Max height constraint */
+            background-color: transparent; /* Ensure no background */
+            border: 1px solid #999; /* Add a light border for visual structure */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15); /* Add a subtle shadow to the container */
+            border-radius: 5px; /* Slightly round the container corners */
+            overflow: hidden; /* Hide anything poking out */
         }
-        /* Styling for the buttons */
+
+        .key {
+            border: 1px solid #555; /* Border for definition */
+            border-top: none; /* No top border on any key */
+            border-radius: 0 0 5px 5px; /* Rounded bottom corners */
+            cursor: pointer; /* Indicate interactivity */
+            transition: background-color 0.1s ease, box-shadow 0.1s ease; /* Smooth transitions */
+            box-shadow: 0 2px 3px rgba(0,0,0,0.2); /* Subtle shadow */
+            touch-action: none; /* Prevent default touch actions like scrolling when interacting with keys */
+        }
+
+        .white {
+            /* Use flex-grow to distribute space, height relative to container */
+            flex-grow: 1;
+            height: 100%;
+            min-width: 30px; /* Minimum width */
+            background-color: #fff; /* White color */
+            z-index: 1; /* White keys behind black keys */
+            border-right: none; /* Remove right border to create seamless look */
+            border-left: none; /* Remove left border */
+        }
+        /* Add left border back to the first white key */
+        .white:first-child {
+            border-left: 1px solid #555;
+            border-radius: 0 0 0 5px; /* Adjust rounding for first key */
+        }
+         /* Add right border back to the last white key */
+        .white:last-child {
+             border-right: 1px solid #555;
+             border-radius: 0 0 5px 0; /* Adjust rounding for last key */
+        }
+
+        .black {
+            /* Width relative to white keys, height relative to piano container */
+            width: 60%; /* Percentage of the white key it overlaps */
+            height: 60%; /* Percentage of the piano container height */
+            max-width: 38px; /* Max width constraint */
+            max-height: 140px; /* Max height constraint */
+            background-color: #222; /* Black color */
+            position: absolute; /* Position relative to the piano container */
+            z-index: 2; /* Black keys on top */
+            border: 1px solid #333; /* Slightly darker border for black keys */
+            border-top: none; /* No top border */
+            border-radius: 0 0 3px 3px; /* Slightly different rounding */
+            box-shadow: -1px 0 2px rgba(255,255,255,0.2) inset, 0 -2px 2px rgba(0,0,0,0.4) inset, 0 2px 3px rgba(0,0,0,0.4); /* More refined shadow */
+            /* Center the key horizontally AT the specified 'left' position */
+            transform: translateX(-50%);
+        }
+
+        /* Positioning for specific black keys - based on percentage of total piano width */
+        /* These percentages assume 7 white keys. Adjust if needed. */
+        /* 1/7th is approx 14.28% */
+        .black[data-key="Db"] { left: 14.28%; }  /* Gap C-D */
+        .black[data-key="Eb"] { left: 28.57%; } /* Gap D-E */
+        /* No black key between E-F */
+        .black[data-key="Gb"] { left: 57.14%; } /* Gap F-G */
+        .black[data-key="Ab"] { left: 71.42%; } /* Gap G-A */
+        .black[data-key="Bb"] { left: 85.71%; } /* Gap A-B */
+        /* No black key between B-C */
+
+        /* Style for pressed keys */
+        .key.pressed {
+            background-color: #e0e0e0; /* Slightly darker gray for pressed white */
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.3); /* Inset shadow for pressed effect */
+        }
+        .black.key.pressed {
+            background-color: #444; /* Lighter black for pressed black keys */
+            box-shadow: inset -1px 0 2px rgba(255,255,255,0.1), inset 0 -1px 2px rgba(0,0,0,0.3), inset 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        /* --- Info Section Elements --- */
+        #infoDisplay {
+            /* Placeholder styling */
+            font-size: clamp(0.7em, 2.5vmin, 1em); /* Responsive font size */
+            color: #333;
+            white-space: nowrap; /* Prevent wrapping */
+        }
+        #controlsContainer {
+             display: flex;
+             gap: clamp(4px, 1.5vmin, 8px); /* Responsive gap */
+        }
         .control-button {
-            padding: 10px 20px;
-            font-size: 16px;
+            /* Basic button styling */
+            padding: clamp(3px, 1vmin, 5px) clamp(6px, 2vmin, 10px); /* Responsive padding */
+            font-size: clamp(0.7em, 2vmin, 0.9em); /* Responsive font size */
             cursor: pointer;
             border-radius: 5px;
             border: 1px solid #888;
             background-color: #e0e0e0;
+            white-space: nowrap; /* Prevent wrapping */
         }
         .control-button:hover {
             background-color: #d0d0d0;
         }
+
     </style>
-    <script src="//cdn.jsdelivr.net/npm/eruda"></script>
-    <script src="https://cdn.jsdelivr.net/gh/JotaGreen/keytap@main/midiColorConverter.js"></script>
 </head>
 <body>
-    <div id="staffContainer">
-        <canvas id="staffCanvas"></canvas>
-        <div id="controls">
-            <button id="playPauseButton" class="control-button">Play</button>
-            <button id="colorToggleButton" class="control-button">Use Colors</button>
+
+    <div id="gameContainer">
+        <div id="infoSection">
+            <div id="infoDisplay">
+                <span>Health: 50/75</span> | <span>Combo: 0</span>
+            </div>
+            <div id="controlsContainer">
+                 <button id="playPauseButton" class="control-button">Play</button>
+                 <button id="colorToggleButton" class="control-button">Use Colors</button>
+                 <button id="pauseButton" class="control-button">Pause</button>
+            </div>
+        </div>
+
+        <div id="staffSection">
+            <canvas id="staffCanvas"></canvas>
+        </div>
+
+        <div id="bottomPanel">
+             <div id="keyboardSection">
+                 <div class="piano" id="piano">
+                     <div class="key white" data-key="C"></div>
+                     <div class="key white" data-key="D"></div>
+                     <div class="key white" data-key="E"></div>
+                     <div class="key white" data-key="F"></div>
+                     <div class="key white" data-key="G"></div>
+                     <div class="key white" data-key="A"></div>
+                     <div class="key white" data-key="B"></div>
+                     <div class="key black" data-key="Db"></div>
+                     <div class="key black" data-key="Eb"></div>
+                     <div class="key black" data-key="Gb"></div>
+                     <div class="key black" data-key="Ab"></div>
+                     <div class="key black" data-key="Bb"></div>
+                 </div>
+             </div>
         </div>
     </div>
 
     <script>
-        console.log("Main Keytap script starting execution.");
+        console.log("Keytap Game script starting execution.");
 
-        // --- Main Configuration Constants ---
-        const SCROLL_SPEED_PIXELS_PER_SECOND = 100;
-        const PRE_DELAY_SECONDS = 1.0;
-        const STAFF_LINE_COLOR = '#000000';
-        const NOTE_COLOR = '#333333'; // Default note color (black notes mode)
-        // ACCIDENTAL_COLOR is set dynamically in drawAccidental
-        const STAFF_LINE_WIDTH = 1; // Base line width
-        const NOTE_CORNER_RADIUS = 3;
-        const LINE_SPACING = 12;
-        const STAFF_PADDING = LINE_SPACING / 2; // Padding above top note edge and below bottom note edge
-        const JUDGMENT_LINE_COLOR = '#FF0000';
-        const JUDGMENT_LINE_WIDTH = 2; // Base line width
-        const JUDGMENT_LINE_X_PERCENT = 20;
-        const MIDI_NOTE_MIN = 36; // C2
-        const MIDI_NOTE_MAX = 84; // C6
-        const ACCIDENTAL_OFFSET_X =13; // Negative offset for left placement
-        const ACCIDENTAL_FONT_SIZE = LINE_SPACING * 1.2;
-        const LEDGER_LINE_EXTENSION = 4;
-        const LEDGER_LINE_WIDTH = 1; // Base line width
-        const MIN_DISPLAY_TIME = 0.0;
-        // URL for the test JSON data
-        const NOTE_DATA_URL = 'https://raw.githubusercontent.com/JotaGreen/keytap/refs/heads/main/test.json';
+        // --- Initialize Eruda ---
+        try {
+            if (typeof eruda !== 'undefined') {
+                eruda.init();
+                console.log("Eruda initialized.");
+            } else { console.warn("Eruda not found."); }
+        } catch (e) { console.error("Failed to initialize Eruda:", e); }
 
-        // --- DOM Elements ---
-        const container = document.getElementById('staffContainer');
-        const canvas = document.getElementById('staffCanvas');
-        const playPauseButton = document.getElementById('playPauseButton');
-        const colorToggleButton = document.getElementById('colorToggleButton');
+        // --- Global DOM Elements ---
+        const gameContainer = document.getElementById('gameContainer');
+        const infoSection = document.getElementById('infoSection');
+        const staffSection = document.getElementById('staffSection');
+        const bottomPanel = document.getElementById('bottomPanel'); // New container
+        const keyboardSection = document.getElementById('keyboardSection');
 
-        // --- Canvas Setup ---
-        if (!canvas || !playPauseButton || !container || !colorToggleButton) { console.error("Fatal Error: Required DOM element not found!"); }
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { console.error("Fatal Error: Could not get 2D rendering context!"); }
-        const devicePixelRatio = window.devicePixelRatio || 1;
-        console.log(`Device Pixel Ratio: ${devicePixelRatio}`);
 
-        let canvasWidth = 300; // Logical display width
-        let canvasHeight = 150; // Logical display height (will be precisely calculated)
-        let judgmentLineX; // Logical X position
+        // --- Staff Component Logic ---
+        const staffModule = (() => {
+            console.log("Initializing Staff Module...");
 
-        // --- Staff Geometry & Note Position Mapping ---
-        console.log("Calculating staff line Y positions and note mappings...");
-        const HALF_LINE_SPACING = LINE_SPACING / 2;
-        let totalStaffHeight = 150;
-        const staffPositions = {}; // Holds absolute Y coords for staff lines/spaces
-        let diatonicNoteYPositions = {}; // Holds absolute Y coords for note centers
-        const midiToDiatonicDegree = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
+            // --- Configuration Constants ---
+            const SCROLL_SPEED_PIXELS_PER_SECOND = 100;
+            const PRE_DELAY_SECONDS = 1.0;
+            const STAFF_LINE_COLOR = '#000000';
+            const NOTE_COLOR = '#333333'; // Default note color (black notes mode)
+            const STAFF_LINE_WIDTH = 1;
+            const NOTE_CORNER_RADIUS = 3;
+            const LINE_SPACING = 12; // Base spacing, affects height
+            const STAFF_PADDING = LINE_SPACING / 2;
+            const JUDGMENT_LINE_COLOR = '#FF0000';
+            const JUDGMENT_LINE_WIDTH = 2;
+            const JUDGMENT_LINE_X_PERCENT = 20; // Percentage from left
+            const MIDI_NOTE_MIN = 36; // C2
+            const MIDI_NOTE_MAX = 84; // C6
+            const ACCIDENTAL_OFFSET_X = -6; // Adjusted offset for better placement within note rect
+            const ACCIDENTAL_FONT_SIZE = LINE_SPACING * 1.2;
+            const LEDGER_LINE_EXTENSION = 4;
+            const LEDGER_LINE_WIDTH = 1;
+            const MIN_DISPLAY_TIME = 0.0;
+            const NOTE_DATA_URL = 'https://raw.githubusercontent.com/JotaGreen/keytap/refs/heads/main/test.json';
 
-        /** Calculates staff geometry, note Y positions, and total canvas height */
-        function setupStaffAndNotes() {
-            let currentY_rel = 0; const staffPositions_rel = {};
-            staffPositions_rel.F5 = currentY_rel; staffPositions_rel.E5 = staffPositions_rel.F5 + HALF_LINE_SPACING; staffPositions_rel.D5 = staffPositions_rel.F5 + LINE_SPACING; staffPositions_rel.C5 = staffPositions_rel.D5 + HALF_LINE_SPACING; staffPositions_rel.B4 = staffPositions_rel.D5 + LINE_SPACING; staffPositions_rel.A4 = staffPositions_rel.B4 + HALF_LINE_SPACING; staffPositions_rel.G4 = staffPositions_rel.B4 + LINE_SPACING; staffPositions_rel.F4 = staffPositions_rel.G4 + HALF_LINE_SPACING; staffPositions_rel.E4 = staffPositions_rel.G4 + LINE_SPACING; staffPositions_rel.D4 = staffPositions_rel.E4 + HALF_LINE_SPACING; staffPositions_rel.C4 = staffPositions_rel.E4 + LINE_SPACING; staffPositions_rel.B3 = staffPositions_rel.C4 + HALF_LINE_SPACING; staffPositions_rel.A3 = staffPositions_rel.C4 + LINE_SPACING; staffPositions_rel.G3 = staffPositions_rel.A3 + HALF_LINE_SPACING; staffPositions_rel.F3 = staffPositions_rel.A3 + LINE_SPACING; staffPositions_rel.E3 = staffPositions_rel.F3 + HALF_LINE_SPACING; staffPositions_rel.D3 = staffPositions_rel.F3 + LINE_SPACING; staffPositions_rel.C3 = staffPositions_rel.D3 + HALF_LINE_SPACING; staffPositions_rel.B2 = staffPositions_rel.D3 + LINE_SPACING; staffPositions_rel.A2 = staffPositions_rel.B2 + HALF_LINE_SPACING; staffPositions_rel.G2 = staffPositions_rel.B2 + LINE_SPACING;
+            // --- DOM Elements (Staff Specific) ---
+            const canvas = document.getElementById('staffCanvas');
+            const playPauseButton = document.getElementById('playPauseButton');
+            const colorToggleButton = document.getElementById('colorToggleButton');
 
-            const noteNames = ["C", "D", "E", "F", "G", "A", "B"];
-            const midiRef = 60; const yRef_rel = staffPositions_rel.C4;
-            diatonicNoteYPositions = {};
-            let minY_rel = Infinity, maxY_rel = -Infinity;
-            for (let midi = MIDI_NOTE_MIN; midi <= MIDI_NOTE_MAX; midi++) {
-                const octave = Math.floor(midi / 12) - 1; const noteIndex = midi % 12;
-                const diatonicDegree = midiToDiatonicDegree[noteIndex];
-                const referenceOctave = Math.floor(midiRef / 12) - 1; const octaveDifference = octave - referenceOctave;
-                const stepsFromRefDegree = diatonicDegree - midiToDiatonicDegree[midiRef % 12];
-                const totalDiatonicSteps = octaveDifference * 7 + stepsFromRefDegree;
-                const yPos_rel = yRef_rel - (totalDiatonicSteps * HALF_LINE_SPACING);
-                const baseNoteLetter = noteNames[diatonicDegree]; const baseNoteName = baseNoteLetter + octave;
-                if (!(baseNoteName in diatonicNoteYPositions)) { diatonicNoteYPositions[baseNoteName] = yPos_rel; minY_rel = Math.min(minY_rel, yPos_rel); maxY_rel = Math.max(maxY_rel, yPos_rel); }
+            // --- Canvas Setup ---
+            if (!canvas || !playPauseButton || !colorToggleButton || !staffSection) {
+                console.error("Staff Error: Required DOM element not found!");
+                return null; // Stop module initialization
             }
-            console.log("Relative diatonic note Y positions calculated.");
-
-            const noteHeight = LINE_SPACING;
-            const topNoteEdgeY_rel = minY_rel - (noteHeight / 2); const bottomNoteEdgeY_rel = maxY_rel + (noteHeight / 2);
-            totalStaffHeight = (bottomNoteEdgeY_rel - topNoteEdgeY_rel) + (STAFF_PADDING * 2);
-            totalStaffHeight = Math.max(100, totalStaffHeight);
-            const yOffset = STAFF_PADDING - topNoteEdgeY_rel;
-
-            for (const key in staffPositions_rel) { const absKey = key.replace('_rel', ''); staffPositions[absKey] = staffPositions_rel[key] + yOffset; }
-            for (const key in diatonicNoteYPositions) { diatonicNoteYPositions[key] += yOffset; }
-
-            console.log(`Precise Total Staff Logical Height Calculated (Padding: ${STAFF_PADDING.toFixed(1)}px): ${totalStaffHeight.toFixed(1)}px`);
-        }
-        setupStaffAndNotes(); // Calculate staff geometry and total height once
-
-        // --- Note Data Storage ---
-        let noteMap = null; let notesToDraw = [];
-
-        // --- State Variables ---
-        let isRunning = false; let animationFrameId = null;
-        let displayTime = PRE_DELAY_SECONDS; let lastTimestamp = 0;
-        let isDragging = false; let dragStartX = 0; let dragStartTime = 0;
-        let useColoredNotes = false; // Start with black notes by default
-
-        // --- Note Y Position Lookup Function ---
-        /** Gets the Y position for a note based on its base diatonic name */
-        function getNoteYPosition(noteName) {
-            const baseNameMatch = noteName.match(/([A-G])[#b]?(\d)/);
-            if (baseNameMatch) {
-                const baseName = baseNameMatch[1] + baseNameMatch[2];
-                const yPosition = diatonicNoteYPositions[baseName];
-                if (yPosition !== undefined) { return yPosition; }
-                else { console.error(`Lookup Failure: Base name "${baseName}" (from "${noteName}") not in map!`); return null; }
-            } else { console.warn(`Could not parse base note: ${noteName}`); return null; }
-        }
-
-        // --- Drawing Functions ---
-        /** Draws a single staff line */
-        function drawStaffLine(y) {
-            ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(canvasWidth, y);
-            ctx.lineWidth = STAFF_LINE_WIDTH;
-            ctx.strokeStyle = STAFF_LINE_COLOR;
-            ctx.stroke();
-        }
-        /** Draws the 10 lines of the grand staff */
-        function drawGrandStaff() {
-            drawStaffLine(staffPositions.E4); drawStaffLine(staffPositions.G4); drawStaffLine(staffPositions.B4); drawStaffLine(staffPositions.D5); drawStaffLine(staffPositions.F5);
-            drawStaffLine(staffPositions.G2); drawStaffLine(staffPositions.B2); drawStaffLine(staffPositions.D3); drawStaffLine(staffPositions.F3); drawStaffLine(staffPositions.A3);
-        }
-        /** Helper to draw rounded rectangles */
-        function drawRoundedRect(x, y, width, height, radius) {
-            if (width < 2 * radius) radius = width / 2; if (height < 2 * radius) radius = height / 2;
-            if (width <= 0 || height <= 0) return;
-            ctx.beginPath();
-            ctx.moveTo(x + radius, y);
-            ctx.arcTo(x + width, y, x + width, y + height, radius);
-            ctx.arcTo(x + width, y + height, x, y + height, radius);
-            ctx.arcTo(x, y + height, x, y, radius);
-            ctx.arcTo(x, y, x + width, y, radius);
-            ctx.closePath();
-            ctx.fill();
-        }
-        /** Draws ledger lines for a note if needed */
-        function drawLedgerLines(note, x, noteWidth) {
-            const y = note.y; if (y === null) return;
-            const checkTolerance = HALF_LINE_SPACING / 2;
-            ctx.lineWidth = LEDGER_LINE_WIDTH;
-            ctx.strokeStyle = STAFF_LINE_COLOR;
-            const ledgerXStart = x - LEDGER_LINE_EXTENSION;
-            const ledgerXEnd = x + noteWidth + LEDGER_LINE_EXTENSION;
-            // Above treble F5
-            if (y < staffPositions.F5 - checkTolerance) { for (let lineY = staffPositions.F5 - LINE_SPACING; lineY >= y - checkTolerance; lineY -= LINE_SPACING) { ctx.beginPath(); ctx.moveTo(ledgerXStart, lineY); ctx.lineTo(ledgerXEnd, lineY); ctx.stroke(); } }
-            // Middle C (C4)
-            if (Math.abs(y - staffPositions.C4) < checkTolerance) { ctx.beginPath(); ctx.moveTo(ledgerXStart, staffPositions.C4); ctx.lineTo(ledgerXEnd, staffPositions.C4); ctx.stroke(); }
-            // Below bass G2
-            if (y > staffPositions.G2 + checkTolerance) { for (let lineY = staffPositions.G2 + LINE_SPACING; lineY <= y + checkTolerance; lineY += LINE_SPACING) { ctx.beginPath(); ctx.moveTo(ledgerXStart, lineY); ctx.lineTo(ledgerXEnd, lineY); ctx.stroke(); } }
-        }
-        /** Draws the accidental symbol (# or b) with dynamic color */
-        function drawAccidental(note, x) {
-            const accidental = note.name.includes('#') ? '♯' : note.name.includes('b') ? '♭' : null;
-            if (accidental) {
-                if (note.y === null || note.y === undefined) { return; }
-                // Set color based on note color mode
-                ctx.fillStyle = useColoredNotes ? '#000000' : '#888888'; // Black if notes colored, Gray if notes black
-                ctx.font = `${ACCIDENTAL_FONT_SIZE}px sans-serif`;
-                ctx.textAlign = 'right'; // Align right for negative offset
-                ctx.textBaseline = 'middle';
-                const accidentalX = x + ACCIDENTAL_OFFSET_X; // Use negative offset
-                const accidentalY = note.y;
-                ctx.fillText(accidental, accidentalX, accidentalY);
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                console.error("Staff Error: Could not get 2D rendering context!");
+                return null;
             }
-        }
-        /** Draws a single note rectangle and its accidental */
-        function drawNote(note, timeToDisplay) {
-            if (note.y === null || note.y === undefined) { return; }
-            const noteY = note.y;
-            const timeUntilJudgment = note.time - timeToDisplay;
-            const noteX = judgmentLineX + (timeUntilJudgment * SCROLL_SPEED_PIXELS_PER_SECOND);
-            const noteWidth = note.duration * SCROLL_SPEED_PIXELS_PER_SECOND;
-            const noteHeight = LINE_SPACING; // Note height matches line spacing
+            const devicePixelRatio = window.devicePixelRatio || 1;
+            console.log(`Staff: Device Pixel Ratio: ${devicePixelRatio}`);
 
-            // Determine note color
-            let currentNoteColor = NOTE_COLOR;
-            if (useColoredNotes) {
-                if (typeof getMidiNoteColor === 'function') {
-                    try {
-                        const rgbArray = getMidiNoteColor(note.midi);
-                        if (rgbArray && rgbArray.length === 3) {
-                            currentNoteColor = `rgb(${rgbArray[0]}, ${rgbArray[1]}, ${rgbArray[2]})`;
-                        } else { currentNoteColor = NOTE_COLOR; } // Fallback
-                    } catch (e) { console.error(`Error calling getMidiNoteColor:`, e); currentNoteColor = NOTE_COLOR; }
-                } else { currentNoteColor = NOTE_COLOR; } // Fallback if function missing
+            let canvasWidth = 300; // Logical display width (updated on resize)
+            let canvasHeight = 150; // Logical display height (updated on resize)
+            let judgmentLineX; // Logical X position (updated on resize)
+
+            // --- Staff Geometry & Note Position Mapping ---
+            console.log("Staff: Calculating staff line Y positions and note mappings...");
+            const HALF_LINE_SPACING = LINE_SPACING / 2;
+            let totalStaffLogicalHeight = 150; // Calculated height
+            const staffPositions = {}; // Holds absolute Y coords for staff lines/spaces
+            let diatonicNoteYPositions = {}; // Holds absolute Y coords for note centers
+            const midiToDiatonicDegree = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6]; // C=0, D=1, ..., B=6
+
+            /** Calculates staff geometry, note Y positions, and total canvas height */
+            function setupStaffAndNotes() {
+                // Relative Y positions (Top line F5 is 0)
+                let currentY_rel = 0;
+                const staffPositions_rel = {};
+                staffPositions_rel.F5 = currentY_rel; // Top line treble
+                staffPositions_rel.E5 = staffPositions_rel.F5 + HALF_LINE_SPACING;
+                staffPositions_rel.D5 = staffPositions_rel.F5 + LINE_SPACING;
+                staffPositions_rel.C5 = staffPositions_rel.D5 + HALF_LINE_SPACING;
+                staffPositions_rel.B4 = staffPositions_rel.D5 + LINE_SPACING;
+                staffPositions_rel.A4 = staffPositions_rel.B4 + HALF_LINE_SPACING;
+                staffPositions_rel.G4 = staffPositions_rel.B4 + LINE_SPACING; // Treble G line
+                staffPositions_rel.F4 = staffPositions_rel.G4 + HALF_LINE_SPACING;
+                staffPositions_rel.E4 = staffPositions_rel.G4 + LINE_SPACING; // Treble E line
+                // Space between staves (equivalent to one line space)
+                const spaceBetweenStaves = LINE_SPACING;
+                staffPositions_rel.D4 = staffPositions_rel.E4 + HALF_LINE_SPACING; // Middle C space (relative)
+                staffPositions_rel.C4 = staffPositions_rel.E4 + LINE_SPACING; // Middle C line (relative)
+                staffPositions_rel.B3 = staffPositions_rel.C4 + HALF_LINE_SPACING;
+                staffPositions_rel.A3 = staffPositions_rel.C4 + LINE_SPACING; // Bass A line
+                staffPositions_rel.G3 = staffPositions_rel.A3 + HALF_LINE_SPACING;
+                staffPositions_rel.F3 = staffPositions_rel.A3 + LINE_SPACING; // Bass F line
+                staffPositions_rel.E3 = staffPositions_rel.F3 + HALF_LINE_SPACING;
+                staffPositions_rel.D3 = staffPositions_rel.F3 + LINE_SPACING; // Bass D line
+                staffPositions_rel.C3 = staffPositions_rel.D3 + HALF_LINE_SPACING;
+                staffPositions_rel.B2 = staffPositions_rel.D3 + LINE_SPACING; // Bass B line
+                staffPositions_rel.A2 = staffPositions_rel.B2 + HALF_LINE_SPACING;
+                staffPositions_rel.G2 = staffPositions_rel.B2 + LINE_SPACING; // Bottom line bass
+
+                // Map MIDI notes to Y positions
+                const noteNames = ["C", "D", "E", "F", "G", "A", "B"];
+                const midiRef = 60; // Middle C (C4)
+                const yRef_rel = staffPositions_rel.C4; // Y position of Middle C line
+                diatonicNoteYPositions = {};
+                let minY_rel = Infinity, maxY_rel = -Infinity;
+
+                for (let midi = MIDI_NOTE_MIN; midi <= MIDI_NOTE_MAX; midi++) {
+                    const octave = Math.floor(midi / 12) - 1;
+                    const noteIndex = midi % 12;
+                    const diatonicDegree = midiToDiatonicDegree[noteIndex]; // 0-6
+
+                    const referenceOctave = Math.floor(midiRef / 12) - 1; // Octave of C4 is 4
+                    const octaveDifference = octave - referenceOctave; // How many octaves away from C4
+
+                    // Steps relative to C (0) within an octave
+                    const stepsFromRefDegree = diatonicDegree - midiToDiatonicDegree[midiRef % 12]; // midiRef%12 is 0 for C
+
+                    // Total diatonic steps away from C4 line (negative is up, positive is down)
+                    const totalDiatonicSteps = octaveDifference * 7 + stepsFromRefDegree;
+
+                    // Calculate Y position relative to C4 line
+                    const yPos_rel = yRef_rel - (totalDiatonicSteps * HALF_LINE_SPACING);
+
+                    // Store the position using the base note name (e.g., "C4", "G5")
+                    const baseNoteLetter = noteNames[diatonicDegree];
+                    const baseNoteName = baseNoteLetter + octave;
+                    if (!(baseNoteName in diatonicNoteYPositions)) {
+                        diatonicNoteYPositions[baseNoteName] = yPos_rel;
+                        minY_rel = Math.min(minY_rel, yPos_rel);
+                        maxY_rel = Math.max(maxY_rel, yPos_rel);
+                    }
+                }
+                console.log("Staff: Relative diatonic note Y positions calculated.");
+
+                // Calculate total height needed based on highest/lowest note centers + note height + padding
+                const noteHeight = LINE_SPACING; // Note height matches line spacing
+                const topNoteEdgeY_rel = minY_rel - (noteHeight / 2);
+                const bottomNoteEdgeY_rel = maxY_rel + (noteHeight / 2);
+                totalStaffLogicalHeight = (bottomNoteEdgeY_rel - topNoteEdgeY_rel) + (STAFF_PADDING * 2);
+                totalStaffLogicalHeight = Math.max(100, totalStaffLogicalHeight); // Ensure a minimum height
+
+                // Calculate offset to center the staff vertically within the calculated height
+                const yOffset = STAFF_PADDING - topNoteEdgeY_rel;
+
+                // Convert relative Y positions to absolute Y positions within the canvas logical height
+                for (const key in staffPositions_rel) {
+                    staffPositions[key] = staffPositions_rel[key] + yOffset;
+                }
+                for (const key in diatonicNoteYPositions) {
+                    diatonicNoteYPositions[key] += yOffset;
+                }
+
+                console.log(`Staff: Precise Total Staff Logical Height Calculated (Padding: ${STAFF_PADDING.toFixed(1)}px): ${totalStaffLogicalHeight.toFixed(1)}px`);
             }
+            setupStaffAndNotes(); // Calculate staff geometry and total height once
 
-            // Draw only if potentially visible (culling)
-            if (noteX < canvasWidth && (noteX + noteWidth) > 0) {
-                drawLedgerLines(note, noteX, noteWidth); // Draw ledger lines first (behind)
-                ctx.fillStyle = currentNoteColor; // Set the determined color
-                drawRoundedRect(noteX, noteY - noteHeight / 2, noteWidth, noteHeight, NOTE_CORNER_RADIUS); // Draw note body
-                drawAccidental(note, noteX); // Draw accidental last (on top)
-            }
-        }
-        /** Draws the vertical judgment line */
-        function drawJudgmentLine() {
-             ctx.beginPath();
-             ctx.moveTo(judgmentLineX, 0);
-             ctx.lineTo(judgmentLineX, canvasHeight);
-             ctx.lineWidth = JUDGMENT_LINE_WIDTH;
-             ctx.strokeStyle = JUDGMENT_LINE_COLOR;
-             ctx.stroke();
-        }
-        /** Redraws the entire canvas for the current display time */
-        function redrawCanvas(timeToDisplay) {
-            ctx.save(); // Save default context state
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear physical pixels
-            ctx.scale(devicePixelRatio, devicePixelRatio); // Scale context for drawing
+            // --- Note Data Storage ---
+            let noteMap = null;
+            let notesToDraw = [];
 
-            // Draw static elements
-            drawGrandStaff();
-            drawJudgmentLine();
-            // Draw dynamic elements (notes)
-            if (notesToDraw.length > 0) {
-                notesToDraw.forEach(note => drawNote(note, timeToDisplay));
-            }
+            // --- State Variables ---
+            let isRunning = false;
+            let animationFrameId = null;
+            let displayTime = PRE_DELAY_SECONDS;
+            let lastTimestamp = 0;
+            let isDragging = false;
+            let dragStartX = 0;
+            let dragStartTime = 0;
+            let useColoredNotes = false; // Start with black notes by default
 
-            ctx.restore(); // Restore context state
-        }
-
-        // --- Animation Loop ---
-        /** Handles the animation frame updates */
-        function animationLoop(timestamp) {
-            if (!isRunning) { animationFrameId = null; return; } // Stop if paused
-            const currentTimeSeconds = timestamp / 1000.0;
-            // Calculate time elapsed since last frame
-            const deltaTime = lastTimestamp > 0 ? currentTimeSeconds - lastTimestamp : 0;
-            displayTime += deltaTime; // Advance the display time
-            lastTimestamp = currentTimeSeconds; // Store timestamp for next frame
-            redrawCanvas(displayTime); // Redraw everything for the new time
-            animationFrameId = requestAnimationFrame(animationLoop); // Request next frame
-        }
-
-        // --- Control Functions ---
-        /** Starts the scrolling animation */
-        function playAnimation() {
-            if (!isRunning) {
-                console.log("Playing animation...");
-                isRunning = true;
-                playPauseButton.textContent = "Pause";
-                canvas.style.cursor = 'default'; // Normal cursor when playing
-                lastTimestamp = performance.now() / 1000.0; // Reset timestamp for delta calculation
-                if (!animationFrameId) { // Avoid multiple loops
-                    animationFrameId = requestAnimationFrame(animationLoop);
+            // --- Note Y Position Lookup Function ---
+            /**
+             * Gets the Y position for a note based on its base diatonic name (e.g., "C4", "F#5").
+             * @param {string} noteName The note name string (e.g., "C4", "F#5").
+             * @returns {number|null} The Y coordinate or null if lookup fails.
+             */
+            function getNoteYPosition(noteName) {
+                // Match the base note letter (A-G) and octave number (\d)
+                // Allows for optional sharp (#) or flat (b)
+                const baseNameMatch = noteName.match(/([A-G])[#b]?(\d)/);
+                if (baseNameMatch) {
+                    // Construct the base name key used in the lookup table (e.g., "C4", "G5")
+                    const baseName = baseNameMatch[1] + baseNameMatch[2];
+                    const yPosition = diatonicNoteYPositions[baseName];
+                    if (yPosition !== undefined) {
+                        return yPosition;
+                    } else {
+                        // This note's base name isn't in our calculated map (e.g., out of range C2-C6)
+                        // console.warn(`Staff: Y Lookup Failure: Base name "${baseName}" (from "${noteName}") not in diatonicNoteYPositions map.`);
+                        return null; // Indicate lookup failure
+                    }
+                } else {
+                    // The provided note name doesn't match the expected format
+                    console.warn(`Staff: Could not parse base note name from: "${noteName}"`);
+                    return null;
                 }
             }
-        }
-        /** Stops the scrolling animation */
-        function pauseAnimation() {
-            if (isRunning) {
-                console.log("Pausing animation...");
-                isRunning = false; // Flag checked by animationLoop to stop
-                playPauseButton.textContent = "Play";
-                canvas.style.cursor = 'grab'; // Grab cursor when paused/draggable
+
+
+            // --- Drawing Functions ---
+            function drawStaffLine(y) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvasWidth, y);
+                ctx.lineWidth = STAFF_LINE_WIDTH;
+                ctx.strokeStyle = STAFF_LINE_COLOR;
+                ctx.stroke();
             }
-        }
-        /** Toggles between play and pause states */
-        function togglePlayPause() {
-            if (isRunning) { pauseAnimation(); } else { playAnimation(); }
-        }
-        /** Toggles between black/white and colored notes */
-        function toggleNoteColors() {
-            useColoredNotes = !useColoredNotes; // Flip the state
-            colorToggleButton.textContent = useColoredNotes ? "Use Black" : "Use Colors"; // Update button text
-            console.log(`Note colors toggled. Using colored notes: ${useColoredNotes}`);
-            redrawCanvas(displayTime); // Redraw immediately with new colors
-        }
 
-        // --- Event Handlers ---
-        /** Handles window resize events */
-        function handleResize() {
-            console.log("Handling resize...");
-            const displayWidth = container.offsetWidth; // Get current container width
-            const displayHeight = totalStaffHeight; // Use the fixed calculated height
-            canvasWidth = displayWidth; // Update logical width
-            canvasHeight = displayHeight; // Update logical height
-
-            // Set canvas buffer size based on pixel ratio for sharpness
-            canvas.width = Math.round(displayWidth * devicePixelRatio);
-            canvas.height = Math.round(displayHeight * devicePixelRatio);
-            // Set canvas display size using CSS
-            canvas.style.width = `${displayWidth}px`;
-            canvas.style.height = `${displayHeight}px`;
-
-            // Recalculate judgment line logical X position
-            judgmentLineX = canvasWidth * (JUDGMENT_LINE_X_PERCENT / 100);
-
-            console.log(`Canvas resized - Display: ${displayWidth.toFixed(0)}x${displayHeight.toFixed(1)}px, Buffer: ${canvas.width}x${canvas.height}px`);
-            redrawCanvas(displayTime); // Redraw immediately
-        }
-        /** Gets the client X coordinate from mouse or touch events */
-        function getEventX(event) { return event.touches ? event.touches[0].clientX : event.clientX; }
-        /** Handles drag start (mousedown/touchstart) on the canvas */
-        function handleDragStart(event) {
-            if (!isRunning) { // Only allow dragging when paused
-                isDragging = true;
-                // Calculate starting X relative to the canvas element
-                dragStartX = getEventX(event) - canvas.getBoundingClientRect().left;
-                dragStartTime = displayTime; // Store time at drag start
-                canvas.classList.add('dragging'); // Add class for styling
-                event.preventDefault(); // Prevent default actions like text selection
+            function drawGrandStaff() {
+                // Treble Staff Lines (E4, G4, B4, D5, F5)
+                drawStaffLine(staffPositions.E4); drawStaffLine(staffPositions.G4); drawStaffLine(staffPositions.B4); drawStaffLine(staffPositions.D5); drawStaffLine(staffPositions.F5);
+                // Bass Staff Lines (G2, B2, D3, F3, A3)
+                drawStaffLine(staffPositions.G2); drawStaffLine(staffPositions.B2); drawStaffLine(staffPositions.D3); drawStaffLine(staffPositions.F3); drawStaffLine(staffPositions.A3);
             }
-        }
-        /** Handles drag movement (mousemove/touchmove) */
-        function handleDragMove(event) {
-            if (isDragging) {
-                const currentX = getEventX(event) - canvas.getBoundingClientRect().left;
-                const deltaX = currentX - dragStartX; // Pixel difference from start
-                // Convert pixel delta to time delta (negative because dragging right moves time backward)
-                const deltaTimeOffset = deltaX / SCROLL_SPEED_PIXELS_PER_SECOND;
-                // Calculate new display time, clamping at the minimum
-                displayTime = Math.max(MIN_DISPLAY_TIME, dragStartTime - deltaTimeOffset);
-                redrawCanvas(displayTime); // Redraw canvas at the new time
-                event.preventDefault();
+
+            function drawRoundedRect(x, y, width, height, radius) {
+                if (width < 2 * radius) radius = width / 2;
+                if (height < 2 * radius) radius = height / 2;
+                if (width <= 0 || height <= 0) return; // Don't draw zero/negative size rects
+                ctx.beginPath();
+                ctx.moveTo(x + radius, y);
+                ctx.arcTo(x + width, y, x + width, y + height, radius);
+                ctx.arcTo(x + width, y + height, x, y + height, radius);
+                ctx.arcTo(x, y + height, x, y, radius);
+                ctx.arcTo(x, y, x + width, y, radius);
+                ctx.closePath();
+                ctx.fill();
             }
-        }
-        /** Handles drag end (mouseup/touchend/mouseleave/touchcancel) */
-        function handleDragEnd(event) {
-            if (isDragging) {
-                isDragging = false;
-                canvas.classList.remove('dragging');
-                event.preventDefault();
+
+            function drawLedgerLines(note, x, noteWidth) {
+                const y = note.y; if (y === null) return;
+                const checkTolerance = HALF_LINE_SPACING / 2; // Tolerance for checking proximity to lines
+                ctx.lineWidth = LEDGER_LINE_WIDTH;
+                ctx.strokeStyle = STAFF_LINE_COLOR;
+                const ledgerXStart = x - LEDGER_LINE_EXTENSION;
+                const ledgerXEnd = x + noteWidth + LEDGER_LINE_EXTENSION;
+
+                // Ledger lines ABOVE treble staff (F5 is top line)
+                if (y < staffPositions.F5 - checkTolerance) {
+                    for (let lineY = staffPositions.F5 - LINE_SPACING; lineY >= y - checkTolerance; lineY -= LINE_SPACING) {
+                        ctx.beginPath(); ctx.moveTo(ledgerXStart, lineY); ctx.lineTo(ledgerXEnd, lineY); ctx.stroke();
+                    }
+                }
+                // Ledger line FOR Middle C (C4) - check if note is ON C4 line
+                if (Math.abs(y - staffPositions.C4) < checkTolerance) {
+                    ctx.beginPath(); ctx.moveTo(ledgerXStart, staffPositions.C4); ctx.lineTo(ledgerXEnd, staffPositions.C4); ctx.stroke();
+                }
+                 // Ledger lines BELOW bass staff (G2 is bottom line)
+                if (y > staffPositions.G2 + checkTolerance) {
+                    for (let lineY = staffPositions.G2 + LINE_SPACING; lineY <= y + checkTolerance; lineY += LINE_SPACING) {
+                        ctx.beginPath(); ctx.moveTo(ledgerXStart, lineY); ctx.lineTo(ledgerXEnd, lineY); ctx.stroke();
+                    }
+                }
             }
-        }
 
-        // --- Initialization ---
-        /** Loads note data from the specified URL */
-        async function loadNoteData() {
-             console.log(`Loading note data from: ${NOTE_DATA_URL}`);
-             try {
-                  const response = await fetch(NOTE_DATA_URL);
-                  if (!response.ok) {
-                      throw new Error(`HTTP error! status: ${response.status}`);
-                  }
-                  const jsonData = await response.json(); // Parse JSON response
+            function drawAccidental(note, x) {
+                const accidental = note.name.includes('#') ? '♯' : note.name.includes('b') ? '♭' : null;
+                if (accidental && note.y !== null) {
+                    // Set color based on note color mode (always visible)
+                    ctx.fillStyle = '#000000'; // Black for accidentals regardless of note color
+                    ctx.font = `${ACCIDENTAL_FONT_SIZE}px sans-serif`;
+                    ctx.textAlign = 'right'; // Align right for negative offset
+                    ctx.textBaseline = 'middle';
+                    const accidentalX = x + ACCIDENTAL_OFFSET_X; // Place slightly before the note rectangle start
+                    const accidentalY = note.y;
+                    ctx.fillText(accidental, accidentalX, accidentalY);
+                }
+            }
 
-                  noteMap = jsonData; // Assign the fetched data
-                  console.log("Note data loaded successfully via fetch.");
+            function drawNote(note, timeToDisplay) {
+                if (note.y === null || note.y === undefined) { return; } // Skip notes with invalid Y positions
 
-                  // Process notes from the first track
-                  if (noteMap && noteMap.tracks && noteMap.tracks.length > 0 && noteMap.tracks[0].notes) {
-                     notesToDraw = noteMap.tracks[0].notes
-                         .map(note => ({ ...note, y: getNoteYPosition(note.name) }))
-                         .filter(note => note.y !== null); // Filter out notes where Y lookup failed
+                const noteY = note.y; // Center Y position
+                const timeUntilJudgment = note.time - timeToDisplay;
+                const noteX = judgmentLineX + (timeUntilJudgment * SCROLL_SPEED_PIXELS_PER_SECOND);
+                const noteWidth = Math.max(1, note.duration * SCROLL_SPEED_PIXELS_PER_SECOND); // Ensure minimum width of 1px
+                const noteHeight = LINE_SPACING; // Note height matches line spacing
 
-                     console.log(`Processed ${noteMap.tracks[0].notes.length} notes, ${notesToDraw.length} remain after filtering.`);
-                     notesToDraw.sort((a, b) => a.time - b.time); // Sort by time
-                     console.log("Notes sorted by start time.");
-                  } else {
-                      console.error("Error: Fetched note data is missing tracks or notes, or has an invalid format.");
-                      notesToDraw = [];
-                  }
-             } catch (error) {
-                 console.error("Fatal Error loading or processing note data:", error);
-                 notesToDraw = []; // Ensure notesToDraw is empty on error
-                 // Optionally display an error message to the user on the page
+                // Determine note color
+                let currentNoteColor = NOTE_COLOR; // Default black/grey
+                if (useColoredNotes) {
+                    if (typeof getMidiNoteColor === 'function') {
+                        try {
+                            // Assuming getMidiNoteColor is available from the external script
+                            const rgbArray = getMidiNoteColor(note.midi);
+                            if (rgbArray && rgbArray.length === 3) {
+                                currentNoteColor = `rgb(${rgbArray[0]}, ${rgbArray[1]}, ${rgbArray[2]})`;
+                            } else { currentNoteColor = NOTE_COLOR; } // Fallback
+                        } catch (e) { console.error(`Staff: Error calling getMidiNoteColor:`, e); currentNoteColor = NOTE_COLOR; }
+                    } else { currentNoteColor = NOTE_COLOR; } // Fallback if function missing
+                }
+
+                // Draw only if potentially visible (basic culling)
+                if (noteX < canvasWidth && (noteX + noteWidth) > 0) {
+                    drawLedgerLines(note, noteX, noteWidth); // Draw ledger lines first (behind)
+                    ctx.fillStyle = currentNoteColor; // Set the determined color
+                    drawRoundedRect(noteX, noteY - noteHeight / 2, noteWidth, noteHeight, NOTE_CORNER_RADIUS); // Draw note body
+                    drawAccidental(note, noteX); // Draw accidental last (on top)
+                }
+            }
+
+            function drawJudgmentLine() {
+                 ctx.beginPath();
+                 ctx.moveTo(judgmentLineX, 0);
+                 ctx.lineTo(judgmentLineX, canvasHeight);
+                 ctx.lineWidth = JUDGMENT_LINE_WIDTH;
+                 ctx.strokeStyle = JUDGMENT_LINE_COLOR;
+                 ctx.stroke();
+            }
+
+            function redrawCanvas(timeToDisplay) {
+                if (!ctx) return; // Don't draw if context is not available
+                ctx.save(); // Save default context state
+                // Clear the canvas (physical pixels)
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                // Scale the context coordinate system for high-DPI displays
+                ctx.scale(devicePixelRatio, devicePixelRatio);
+
+                // --- Drawing ---
+                // Draw static elements
+                drawGrandStaff();
+                drawJudgmentLine();
+
+                // Draw dynamic elements (notes)
+                if (notesToDraw.length > 0) {
+                    // Potential Optimization: Only draw notes within the visible time range
+                    notesToDraw.forEach(note => drawNote(note, timeToDisplay));
+                } else {
+                    // Optionally draw a "Loading..." or "No notes" message
+                    ctx.fillStyle = '#888';
+                    ctx.font = '16px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle'; // Center text vertically
+                    // Draw in the middle of the logical canvas dimensions
+                    ctx.fillText('Loading notes...', canvasWidth / 2, canvasHeight / 2);
+                }
+                // ---------------
+
+                ctx.restore(); // Restore context state
+            }
+
+            // --- Animation Loop ---
+            function animationLoop(timestamp) {
+                if (!isRunning) { animationFrameId = null; return; } // Stop if paused
+
+                const currentTimeSeconds = timestamp / 1000.0;
+                // Calculate time elapsed since last frame, prevent large jumps on pause/resume
+                const deltaTime = lastTimestamp > 0 ? Math.min(0.1, currentTimeSeconds - lastTimestamp) : 0; // Cap delta time
+                displayTime += deltaTime; // Advance the display time
+
+                lastTimestamp = currentTimeSeconds; // Store timestamp for next frame calculation
+
+                redrawCanvas(displayTime); // Redraw everything for the new time
+
+                animationFrameId = requestAnimationFrame(animationLoop); // Request next frame
+            }
+
+            // --- Control Functions ---
+            function playAnimation() {
+                if (!isRunning) {
+                    console.log("Staff: Playing animation...");
+                    isRunning = true;
+                    playPauseButton.textContent = "Pause";
+                    canvas.style.cursor = 'default'; // Normal cursor when playing
+                    // Reset timestamp to avoid large jump after pause
+                    lastTimestamp = performance.now() / 1000.0;
+                    if (!animationFrameId) { // Avoid multiple loops if already requested
+                        animationFrameId = requestAnimationFrame(animationLoop);
+                    }
+                }
+            }
+
+            function pauseAnimation() {
+                if (isRunning) {
+                    console.log("Staff: Pausing animation...");
+                    isRunning = false; // Flag checked by animationLoop to stop
+                    // No need to cancelAnimationFrame explicitly, the loop checks isRunning
+                    playPauseButton.textContent = "Play";
+                    canvas.style.cursor = 'grab'; // Grab cursor when paused/draggable
+                    // Clear lastTimestamp to calculate fresh delta on resume
+                    lastTimestamp = 0;
+                }
+            }
+
+            function togglePlayPause() {
+                if (isRunning) { pauseAnimation(); } else { playAnimation(); }
+            }
+
+            function toggleNoteColors() {
+                useColoredNotes = !useColoredNotes; // Flip the state
+                colorToggleButton.textContent = useColoredNotes ? "Use Black" : "Use Colors"; // Update button text
+                console.log(`Staff: Note colors toggled. Using colored notes: ${useColoredNotes}`);
+                redrawCanvas(displayTime); // Redraw immediately with new colors
+            }
+
+            // --- Event Handlers ---
+            function handleResize() {
+                console.log("Staff: Handling resize...");
+                // Get the available dimensions of the container element
+                const displayWidth = staffSection.offsetWidth;
+                const displayHeight = staffSection.offsetHeight;
+
+                // Ensure dimensions are valid before proceeding
+                if (displayWidth <= 0 || displayHeight <= 0) {
+                    console.warn("Staff: Resize called with zero or negative dimensions. Skipping redraw.");
+                    return;
+                }
+
+                // Set logical canvas width to fill container
+                canvasWidth = displayWidth;
+                // *** FIX: Use the pre-calculated logical height, but cap it at the container's actual height ***
+                // This prevents the staff drawing from being smaller than the canvas when the container is tall,
+                // and ensures the drawing uses coordinates relative to its intended height.
+                canvasHeight = Math.min(displayHeight, totalStaffLogicalHeight);
+
+                // Adjust canvas buffer size for pixel density
+                canvas.width = Math.round(canvasWidth * devicePixelRatio);
+                canvas.height = Math.round(canvasHeight * devicePixelRatio);
+
+                // Set canvas display size using CSS (important!)
+                // The container (#staffSection) uses flexbox align-items: center to handle vertical positioning if displayHeight > canvasHeight
+                canvas.style.width = `${canvasWidth}px`;
+                canvas.style.height = `${canvasHeight}px`;
+
+                // Recalculate judgment line logical X position based on new canvasWidth
+                judgmentLineX = canvasWidth * (JUDGMENT_LINE_X_PERCENT / 100);
+
+                console.log(`Staff: Canvas resized - Container: ${displayWidth}x${displayHeight}, Logical: ${canvasWidth.toFixed(0)}x${canvasHeight.toFixed(1)}px, Buffer: ${canvas.width}x${canvas.height}px`);
+                redrawCanvas(displayTime); // Redraw immediately with new dimensions
+            }
+
+            function getEventX(event) { return event.touches ? event.touches[0].clientX : event.clientX; }
+
+            function handleDragStart(event) {
+                if (!isRunning) { // Only allow dragging when paused
+                    isDragging = true;
+                    // Calculate starting X relative to the canvas element's bounding box
+                    dragStartX = getEventX(event) - canvas.getBoundingClientRect().left;
+                    dragStartTime = displayTime; // Store time at drag start
+                    canvas.classList.add('dragging'); // Add class for styling
+                    // Prevent default only if the event target is the canvas itself
+                    if (event.target === canvas) {
+                         event.preventDefault(); // Prevent text selection, etc.
+                    }
+                }
+            }
+
+            function handleDragMove(event) {
+                if (isDragging) {
+                    const currentX = getEventX(event) - canvas.getBoundingClientRect().left;
+                    const deltaX = currentX - dragStartX; // Pixel difference from start
+
+                    // Convert pixel delta to time delta (negative because dragging right moves time backward)
+                    const deltaTimeOffset = deltaX / SCROLL_SPEED_PIXELS_PER_SECOND;
+
+                    // Calculate new display time, clamping at the minimum allowed time
+                    displayTime = Math.max(MIN_DISPLAY_TIME, dragStartTime - deltaTimeOffset);
+
+                    redrawCanvas(displayTime); // Redraw canvas at the new time
+                    // Prevent default only if the event target is the canvas itself
+                    if (event.target === canvas) {
+                         event.preventDefault();
+                    }
+                }
+            }
+
+            function handleDragEnd(event) {
+                if (isDragging) {
+                    isDragging = false;
+                    canvas.classList.remove('dragging');
+                    // Prevent default only if the event target is the canvas itself
+                    if (event.target === canvas) {
+                        event.preventDefault();
+                    }
+                }
+            }
+
+            // --- Initialization ---
+            async function loadNoteData() {
+                 console.log(`Staff: Loading note data from: ${NOTE_DATA_URL}`);
+                 try {
+                      const response = await fetch(NOTE_DATA_URL);
+                      if (!response.ok) {
+                          throw new Error(`HTTP error! status: ${response.status}`);
+                      }
+                      const jsonData = await response.json(); // Parse JSON response
+
+                      noteMap = jsonData; // Assign the fetched data
+                      console.log("Staff: Note data loaded successfully via fetch.");
+
+                      // Process notes from the first track ONLY, as per specs
+                      if (noteMap && noteMap.tracks && noteMap.tracks.length > 0 && noteMap.tracks[0].notes) {
+                         const rawNotes = noteMap.tracks[0].notes;
+                         console.log(`Staff: Found ${rawNotes.length} notes in the first track.`);
+
+                         notesToDraw = rawNotes
+                             .map(note => {
+                                 // *** FIX: Call getNoteYPosition with only note.name ***
+                                 const yPos = getNoteYPosition(note.name);
+                                 // Log failures specifically
+                                 // if (yPos === null) {
+                                 //     console.warn(`Staff: Failed Y lookup for note: ${note.name} (MIDI: ${note.midi})`);
+                                 // }
+                                 return {
+                                     ...note,
+                                     y: yPos // Store the result (null or number)
+                                 };
+                             })
+                             .filter(note => note.y !== null); // Filter out notes where Y lookup failed (returned null)
+
+                         console.log(`Staff: Processed ${rawNotes.length} notes, ${notesToDraw.length} remain after Y position lookup and filtering.`);
+
+                         // Sort notes by start time for efficient processing/drawing (optional but good practice)
+                         notesToDraw.sort((a, b) => a.time - b.time);
+                         console.log("Staff: Notes sorted by start time.");
+
+                      } else {
+                          console.error("Staff Error: Fetched note data is missing tracks[0] or tracks[0].notes, or has an invalid format.");
+                          notesToDraw = [];
+                      }
+                 } catch (error) {
+                     console.error("Staff: Fatal Error loading or processing note data:", error);
+                     notesToDraw = []; // Ensure notesToDraw is empty on error
+                     // Optionally display an error message to the user on the canvas
+                 }
              }
-         }
 
-        /** Initializes the application */
-        async function initialize() {
-            console.log("Initializing Keytap visualization...");
-            // Initialize Eruda debugging tool
-            try { if (typeof eruda !== 'undefined') { eruda.init(); console.log("Eruda initialized."); } else { console.warn("Eruda not found."); } } catch (e) { console.error("Failed to initialize Eruda:", e); }
-            // Verify getMidiNoteColor function exists (defined in external script)
-            if (typeof getMidiNoteColor === 'function') {
-                console.log("getMidiNoteColor function found.");
-            } else {
-                console.error("CRITICAL: getMidiNoteColor function NOT FOUND. External script might have failed to load or define it.");
+            // Public init function for the module
+            async function init() {
+                console.log("Staff Module: Initializing...");
+                // Verify getMidiNoteColor function exists (defined in external script)
+                if (typeof getMidiNoteColor === 'function') {
+                    console.log("Staff: getMidiNoteColor function found.");
+                } else {
+                    console.error("Staff CRITICAL: getMidiNoteColor function NOT FOUND. External script might have failed to load or define it.");
+                }
+
+                // Staff geometry calculation is done synchronously above
+                await loadNoteData(); // Load data from URL
+                handleResize(); // Set initial size based on container & calculated height
+                displayTime = PRE_DELAY_SECONDS; // Set initial view time
+                redrawCanvas(displayTime); // Draw initial frame
+
+                // Add event listeners
+                playPauseButton.addEventListener('click', togglePlayPause);
+                colorToggleButton.addEventListener('click', toggleNoteColors);
+
+                // Dragging listeners (attach to canvas)
+                canvas.addEventListener('mousedown', handleDragStart);
+                // Attach move/end listeners to window to catch events outside canvas bounds
+                window.addEventListener('mousemove', handleDragMove);
+                window.addEventListener('mouseup', handleDragEnd);
+
+                // Touch listeners (attach to canvas with passive: false to allow preventDefault)
+                canvas.addEventListener('touchstart', handleDragStart, { passive: false });
+                window.addEventListener('touchmove', handleDragMove, { passive: false });
+                window.addEventListener('touchend', handleDragEnd);
+                window.addEventListener('touchcancel', handleDragEnd); // Treat cancel like end
+
+                console.log("Staff Module: Initialization complete.");
             }
 
-            // Staff geometry calculation is now done globally once
-            await loadNoteData(); // Load data from URL
-            handleResize(); // Set initial size based on container & calculated height
-            displayTime = PRE_DELAY_SECONDS; // Set initial view time
-            redrawCanvas(displayTime); // Draw initial frame
+            // Expose necessary functions/variables if needed, otherwise just the init function
+            return {
+                init,
+                handleResize // Expose resize handler to be called globally
+            };
 
-            // Add event listeners
-            window.addEventListener('resize', handleResize);
-            playPauseButton.addEventListener('click', togglePlayPause);
-            colorToggleButton.addEventListener('click', toggleNoteColors);
-            // Dragging listeners
-            canvas.addEventListener('mousedown', handleDragStart); window.addEventListener('mousemove', handleDragMove); window.addEventListener('mouseup', handleDragEnd); canvas.addEventListener('mouseleave', handleDragEnd);
-            canvas.addEventListener('touchstart', handleDragStart, { passive: false }); window.addEventListener('touchmove', handleDragMove, { passive: false }); window.addEventListener('touchend', handleDragEnd); window.addEventListener('touchcancel', handleDragEnd);
+        })(); // Immediately invoke the staff module function
 
-            console.log("Initialization complete. Ready to play.");
+        // --- Keyboard Component Logic ---
+        const keyboardModule = (() => {
+            console.log("Initializing Keyboard Module...");
+
+            // --- DOM Elements (Keyboard Specific) ---
+            const pianoContainer = document.getElementById('piano');
+            if (!pianoContainer) {
+                console.error("Keyboard Error: Piano container element not found!");
+                return null; // Stop module initialization
+            }
+            const keys = pianoContainer.querySelectorAll('.key'); // Get all key elements within the piano
+
+            // --- State Variables ---
+            let isMouseDown = false; // Track mouse button state specifically for keyboard
+            let activeTouches = {}; // Store currently active key per touch identifier: { touchId: keyElement }
+
+            // --- Helper Functions ---
+            function pressKey(keyElement) {
+                if (keyElement && !keyElement.classList.contains('pressed')) {
+                    keyElement.classList.add('pressed');
+                    console.log(`Keyboard: Pressed: ${keyElement.dataset.key}`);
+                    // TODO: Trigger game logic based on key press
+                }
+            }
+
+            function releaseKey(keyElement) {
+                if (keyElement && keyElement.classList.contains('pressed')) {
+                    keyElement.classList.remove('pressed');
+                    console.log(`Keyboard: Released: ${keyElement.dataset.key}`);
+                }
+            }
+
+            // --- Event Handlers ---
+            function handleMouseDown(event) {
+                // Ensure it's the primary mouse button (usually left)
+                if (event.button !== 0) return;
+
+                const targetKey = event.target.closest('.key');
+                // Check if the click was on a valid key within this piano container
+                if (targetKey && pianoContainer.contains(targetKey)) {
+                    isMouseDown = true; // Set the flag indicating the mouse button is down *for the keyboard*
+                    pressKey(targetKey); // Press the key visually
+                    event.preventDefault(); // Prevent potential text selection or dragging page
+                }
+            }
+
+            function handleMouseUp(event) {
+                // Ensure it's the primary mouse button
+                if (event.button !== 0) return;
+
+                // If the mouse button was down *for the keyboard*
+                if (isMouseDown) {
+                    // Release all keys visually within this piano
+                    keys.forEach(releaseKey);
+                    isMouseDown = false; // Reset the keyboard's mouse button state
+                    // No preventDefault needed here usually
+                }
+            }
+
+             // Mouse Leave Handler (listens on the specific piano container)
+            function handleMouseLeave(event) {
+                // If the mouse leaves the piano container *while* the button is pressed *for the keyboard*
+                if (isMouseDown && event.target === pianoContainer) {
+                    // Release all keys visually for this piano
+                    keys.forEach(releaseKey);
+                    isMouseDown = false; // Reset the keyboard's mouse button state
+                }
+            }
+
+            // --- Touch Handlers ---
+            function handleTouchStart(event) {
+                // Prevent default actions ONLY if the touch starts directly on a key
+                // This allows scrolling/other interactions if touch starts elsewhere
+                const initialTargetKey = event.target.closest('.key');
+                 if (initialTargetKey && pianoContainer.contains(initialTargetKey)) {
+                     event.preventDefault(); // Prevent scroll/zoom ONLY when starting on a key
+                 }
+
+                for (let i = 0; i < event.changedTouches.length; i++) {
+                    const touch = event.changedTouches[i];
+                    // Find the element directly under the touch point
+                    const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
+                    const targetKey = elementUnderTouch ? elementUnderTouch.closest('.key') : null;
+
+                    // Ensure the touch started on a valid key within this piano
+                    if (targetKey && pianoContainer.contains(targetKey)) {
+                        const touchId = touch.identifier; // Get unique ID for this touch
+                        // Ensure this touch isn't already tracked (shouldn't happen with start, but safety)
+                        if (!activeTouches[touchId]) {
+                            activeTouches[touchId] = targetKey; // Store the key associated with this touch ID
+                            pressKey(targetKey); // Press the key visually
+                            console.log(`Keyboard Touch Start: ${touchId} on ${targetKey.dataset.key}`);
+                        }
+                    }
+                }
+            }
+
+            function handleTouchMove(event) {
+                 // Prevent default actions ONLY if one of the moved touches is currently active on a key
+                 let shouldPreventDefault = false;
+                 for (let i = 0; i < event.changedTouches.length; i++) {
+                     const touch = event.changedTouches[i];
+                     if (activeTouches[touch.identifier]) {
+                         shouldPreventDefault = true;
+                         break;
+                     }
+                 }
+                 if (shouldPreventDefault) {
+                     event.preventDefault(); // Prevent scrolling while dragging over keys
+                 }
+
+
+                for (let i = 0; i < event.changedTouches.length; i++) {
+                    const touch = event.changedTouches[i];
+                    const touchId = touch.identifier;
+
+                    // Find the element *currently* under the touch point
+                    const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
+                    const currentKey = elementUnderTouch ? elementUnderTouch.closest('.key') : null;
+
+                    // Check if the current element is a valid key within this piano
+                    const isValidKey = currentKey && pianoContainer.contains(currentKey);
+                    // Get the key that was previously active for this specific touch
+                    const previousKey = activeTouches[touchId];
+
+                    // Only process if this touch started on a key (is being tracked)
+                    if (previousKey !== undefined) {
+                        // If the key under the touch has changed OR if the touch moved off a key entirely
+                        if (currentKey !== previousKey) {
+                            // Release the previous key visually (if it exists)
+                            releaseKey(previousKey);
+
+                            // If the touch is now over a new valid key, press it and update tracking
+                            if (isValidKey) {
+                                pressKey(currentKey);
+                                activeTouches[touchId] = currentKey; // Update the active key for this touch
+                                console.log(`Keyboard Touch Move: ${touchId} moved to ${currentKey.dataset.key}`);
+                            } else {
+                                // Touch moved off the piano or onto a non-key element
+                                activeTouches[touchId] = null; // Mark this touch as not on a key anymore (but keep tracking ID until touchend)
+                                console.log(`Keyboard Touch Move: ${touchId} moved off keys`);
+                            }
+                        }
+                        // else: Touch is still on the same key, do nothing
+                    }
+                     // else: This touch didn't start on a key, ignore its movement
+                }
+            }
+
+            function handleTouchEndOrCancel(event) {
+                // Prevent default only if the ending touch was active on a key
+                let shouldPreventDefault = false;
+                for (let i = 0; i < event.changedTouches.length; i++) {
+                    const touch = event.changedTouches[i];
+                    if (activeTouches[touch.identifier]) {
+                        shouldPreventDefault = true;
+                        break;
+                    }
+                }
+                if (shouldPreventDefault) {
+                    event.preventDefault();
+                }
+
+                for (let i = 0; i < event.changedTouches.length; i++) {
+                    const touch = event.changedTouches[i];
+                    const touchId = touch.identifier;
+                    // Get the last key this touch was associated with
+                    const lastKey = activeTouches[touchId];
+
+                    // Release the last key visually, if there was one
+                    releaseKey(lastKey);
+
+                    // Remove this touch from the tracking object
+                    delete activeTouches[touchId];
+                    console.log(`Keyboard Touch End/Cancel: ${touchId}`);
+                }
+            }
+
+            // Public init function for the module
+            function init() {
+                console.log("Keyboard Module: Initializing...");
+
+                // --- Attach Event Listeners ---
+                // Mouse Events (attach to the specific piano container)
+                pianoContainer.addEventListener('mousedown', handleMouseDown);
+                // Listen globally for mouseup to catch releases outside the piano
+                document.addEventListener('mouseup', handleMouseUp);
+                pianoContainer.addEventListener('mouseleave', handleMouseLeave);
+
+                // Touch Events (attach to the specific piano container)
+                // Use passive: false to allow preventDefault() within handlers
+                pianoContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
+                pianoContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
+                pianoContainer.addEventListener('touchend', handleTouchEndOrCancel, { passive: false });
+                pianoContainer.addEventListener('touchcancel', handleTouchEndOrCancel, { passive: false }); // Treat cancel like end
+
+                // Prevent context menu on long press/right-click within the piano
+                pianoContainer.addEventListener('contextmenu', (event) => event.preventDefault());
+
+                console.log("Keyboard Module: Initialization complete.");
+            }
+
+            // Expose necessary functions/variables if needed
+            return {
+                init
+            };
+
+        })(); // Immediately invoke the keyboard module function
+
+        // --- Global Initialization & Layout Management ---
+
+        /** Handles layout adjustments needed on orientation change or resize */
+        function handleLayoutChange() {
+            const orientation = window.matchMedia("(orientation: landscape)").matches ? 'landscape' : 'portrait';
+            console.log(`Layout Check. Orientation: ${orientation}`);
+
+            // Move infoSection into bottomPanel for landscape, or back to gameContainer for portrait
+            if (orientation === 'landscape') {
+                // Check if infoSection is NOT already a child of bottomPanel
+                if (infoSection.parentElement !== bottomPanel) {
+                    bottomPanel.insertBefore(infoSection, keyboardSection); // Place info before keyboard
+                    console.log("Moved infoSection into bottomPanel for landscape.");
+                }
+            } else { // Portrait
+                 // Check if infoSection IS currently a child of bottomPanel
+                if (infoSection.parentElement === bottomPanel) {
+                    gameContainer.insertBefore(infoSection, staffSection); // Place info before staff
+                    console.log("Moved infoSection back to gameContainer for portrait.");
+                }
+            }
+
+            // Trigger resize for staff canvas after potential layout shifts
+            if (staffModule && typeof staffModule.handleResize === 'function') {
+                 // Use setTimeout to allow DOM updates/reflows to settle before resizing canvas
+                 setTimeout(staffModule.handleResize, 50); // Short delay
+                 console.log("Scheduled staff resize.");
+            } else {
+                console.warn("Could not trigger staff resize after layout change.");
+            }
+             // Add resize handling for keyboard if necessary in the future
+        }
+
+
+        /** Main initialization function */
+        async function initializeGame() {
+            console.log("--- Initializing Keytap Game ---");
+
+            // Initialize Modules
+            if (staffModule) await staffModule.init(); else console.error("Staff module failed to load.");
+            if (keyboardModule) keyboardModule.init(); else console.error("Keyboard module failed to load.");
+
+            // Set initial layout based on current orientation/size
+            handleLayoutChange();
+
+            // Add listener for orientation changes
+            window.matchMedia("(orientation: landscape)").addEventListener("change", handleLayoutChange);
+
+            // Add listener for window resize (might affect canvas size even without orientation change)
+            // Debounce resize events for performance
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    console.log("Window resize detected, running layout check.");
+                    // Re-apply layout logic and resize canvas
+                    handleLayoutChange();
+                }, 150); // Wait 150ms after last resize event
+            });
+
+
+            // Placeholder for Pause Button functionality
+            const pauseButton = document.getElementById('pauseButton');
+            if (pauseButton) {
+                pauseButton.addEventListener('click', () => {
+                    console.log("Pause button clicked (placeholder)");
+                    // TODO: Implement actual pause logic
+                    // Example: Toggle staff play/pause
+                    if (staffModule) {
+                        const staffPlayPauseButton = document.getElementById('playPauseButton');
+                        if (staffPlayPauseButton) staffPlayPauseButton.click(); // Simulate click on staff's button
+                    }
+                });
+            }
+
+            console.log("--- Keytap Game Initialization Complete ---");
         }
 
         // --- Entry Point ---
-        // *** Use window.onload to ensure external scripts are loaded ***
-        window.addEventListener('load', initialize);
-        console.log("window.onload event listener added.");
+        window.addEventListener('load', initializeGame);
+        console.log("Global: window.onload event listener added for initializeGame.");
 
     </script>
+
 </body>
 </html>
