@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Piano Keyboard</title>
+    <style>
+        /* Apply border-box sizing globally for easier layout */
+        * {
+            box-sizing: border-box;
+        }
+
+        /* Basic body styling */
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f7fafc; /* Light gray background */
+            font-family: sans-serif;
+            /* Prevent pull-to-refresh and other unwanted touch behaviors */
+            overscroll-behavior: none;
+        }
+
+        /* Custom styles for the piano */
+        .piano {
+            display: flex; /* Use flexbox for key layout */
+            position: relative; /* Needed for positioning black keys */
+            padding: 0; /* No internal padding */
+            width: max-content; /* Make container fit the keys */
+            background-color: transparent; /* Ensure no background */
+            border: 1px solid #999; /* Add a light border for visual structure */
+            margin: 2rem; /* Add margin OUTSIDE the container */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15); /* Add a subtle shadow to the container */
+            border-radius: 5px; /* Slightly round the container corners */
+            overflow: hidden; /* Hide anything poking out */
+        }
+
+        .key {
+            /* box-sizing: border-box; Applied globally now */
+            border: 1px solid #555; /* Border for definition */
+            border-top: none; /* No top border on any key */
+            border-radius: 0 0 5px 5px; /* Rounded bottom corners */
+            cursor: pointer; /* Indicate interactivity */
+            transition: background-color 0.1s ease, box-shadow 0.1s ease; /* Smooth transitions */
+            box-shadow: 0 2px 3px rgba(0,0,0,0.2); /* Subtle shadow */
+            user-select: none; /* Prevent text selection on keys */
+            -webkit-user-select: none; /* Safari */
+            -moz-user-select: none; /* Firefox */
+            -ms-user-select: none; /* IE */
+            /* Prevent touch actions like scrolling when interacting with keys */
+            touch-action: none;
+        }
+
+        .white {
+            width: 60px; /* Width of white keys (includes border) */
+            height: 240px; /* Height of white keys */
+            background-color: #fff; /* White color */
+            z-index: 1; /* White keys behind black keys */
+            border-right: none; /* Remove right border to create seamless look */
+            border-left: none; /* Remove left border */
+        }
+        /* Add left border back to the first white key */
+        .white:first-child {
+            border-left: 1px solid #555;
+            border-radius: 0 0 0 5px; /* Adjust rounding for first key */
+        }
+         /* Add right border back to the last white key */
+        .white:last-child {
+             border-right: 1px solid #555;
+             border-radius: 0 0 5px 0; /* Adjust rounding for last key */
+        }
+
+
+        .black {
+            width: 38px; /* Width of black keys (includes border) */
+            height: 140px; /* Height of black keys */
+            background-color: #222; /* Black color */
+            position: absolute; /* Position relative to the piano container */
+            z-index: 2; /* Black keys on top */
+            border: 1px solid #333; /* Slightly darker border for black keys */
+            border-top: none; /* No top border */
+            border-radius: 0 0 3px 3px; /* Slightly different rounding */
+            box-shadow: -1px 0 2px rgba(255,255,255,0.2) inset, 0 -2px 2px rgba(0,0,0,0.4) inset, 0 2px 3px rgba(0,0,0,0.4); /* More refined shadow */
+            /* Center the key horizontally AT the specified 'left' position */
+            transform: translateX(-50%);
+        }
+
+        /* Positioning for specific black keys - CENTERED over the gap */
+        /* Left value IS the coordinate of the gap line (right edge of preceding white key) */
+        .black[data-key="Db"] { left: 60px; }  /* Gap C-D */
+        .black[data-key="Eb"] { left: 120px; } /* Gap D-E */
+        /* No black key between E-F */
+        .black[data-key="Gb"] { left: 240px; } /* Gap F-G (F ends at 240px) */
+        .black[data-key="Ab"] { left: 300px; } /* Gap G-A (G ends at 300px) */
+        .black[data-key="Bb"] { left: 360px; } /* Gap A-B (A ends at 360px) */
+        /* No black key between B-C */
+
+        /* Style for pressed keys */
+        .key.pressed {
+            background-color: #e0e0e0; /* Slightly darker gray for pressed white */
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.3); /* Inset shadow for pressed effect */
+        }
+
+        .black.key.pressed {
+            background-color: #444; /* Lighter black for pressed black keys */
+            box-shadow: inset -1px 0 2px rgba(255,255,255,0.1), inset 0 -1px 2px rgba(0,0,0,0.3), inset 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        /* Basic responsive adjustments */
+        @media (max-width: 500px) { /* Adjusted breakpoint slightly */
+             /* Adjust margin for smaller screens */
+             .piano {
+                 margin: 1rem;
+             }
+
+            .white {
+                width: 13vw; /* Adjust width based on viewport (includes border) */
+                max-width: 55px; /* Max width constraint */
+                height: 45vw; /* Adjust height */
+                max-height: 220px;
+            }
+            .black {
+                width: 8vw; /* Adjust width (includes border) */
+                max-width: 34px; /* Max width constraint */
+                height: 28vw; /* Adjust height */
+                max-height: 130px;
+                /* transform: translateX(-50%); Already applied above */
+            }
+            /* Adjust black key positions for smaller screens - centered over gaps */
+            /* Using calc with vw units based on white key width (13vw) */
+             .black[data-key="Db"] { left: calc(1 * 13vw); } /* Gap C-D */
+             .black[data-key="Eb"] { left: calc(2 * 13vw); } /* Gap D-E */
+             .black[data-key="Gb"] { left: calc(4 * 13vw); } /* Gap F-G */
+             .black[data-key="Ab"] { left: calc(5 * 13vw); } /* Gap G-A */
+             .black[data-key="Bb"] { left: calc(6 * 13vw); } /* Gap A-B */
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="piano" id="piano">
+        <div class="key white" data-key="C"></div>
+        <div class="key white" data-key="D"></div>
+        <div class="key white" data-key="E"></div>
+        <div class="key white" data-key="F"></div>
+        <div class="key white" data-key="G"></div>
+        <div class="key white" data-key="A"></div>
+        <div class="key white" data-key="B"></div>
+
+        <div class="key black" data-key="Db"></div> <div class="key black" data-key="Eb"></div> <div class="key black" data-key="Gb"></div> <div class="key black" data-key="Ab"></div> <div class="key black" data-key="Bb"></div> </div>
+
+    <script>
+        const pianoContainer = document.getElementById('piano');
+        const keys = document.querySelectorAll('.key'); // Keep reference if needed elsewhere
+        let isMouseDown = false; // Track mouse button state
+        let activeTouches = {}; // Store currently active key per touch identifier: { touchId: keyElement }
+
+        // --- Helper Functions ---
+        function pressKey(keyElement) {
+            // Presses a key visually if it's not already pressed
+            if (keyElement && !keyElement.classList.contains('pressed')) {
+                keyElement.classList.add('pressed');
+                // console.log(`Pressed: ${keyElement.dataset.key}`);
+                // TODO: Add sound playback here if desired
+            }
+        }
+
+        function releaseKey(keyElement) {
+            // Releases a key visually if it is currently pressed
+            if (keyElement && keyElement.classList.contains('pressed')) {
+                keyElement.classList.remove('pressed');
+                // console.log(`Released: ${keyElement.dataset.key}`);
+            }
+        }
+
+        // --- Event Handlers ---
+
+        // Mouse Down Handler
+        function handleMouseDown(event) {
+            // Ensure it's the primary mouse button (usually left)
+            if (event.button !== 0) return;
+
+            // Find the key element that was clicked on
+            const targetKey = event.target.closest('.key');
+            // Check if the click was on a valid key within the piano container
+            if (targetKey && pianoContainer.contains(targetKey)) {
+                isMouseDown = true; // Set the flag indicating the mouse button is down
+                pressKey(targetKey); // Press the key visually
+            }
+        }
+
+        // Mouse Up Handler (listens on the whole document)
+        function handleMouseUp(event) {
+            // Ensure it's the primary mouse button
+            if (event.button !== 0) return;
+
+            // If the mouse button was down
+            if (isMouseDown) {
+                // Release all keys visually
+                // This handles cases where the mouse is released outside the original key or piano
+                keys.forEach(releaseKey);
+                isMouseDown = false; // Reset the mouse button state
+            }
+        }
+
+        // Mouse Move Handler (Optional - currently not used for dragging, only click/hold)
+        // function handleMouseMove(event) {
+        //     if (isMouseDown) {
+        //         // Logic similar to handleTouchMove could be added here
+        //         // to allow dragging the mouse across keys while holding the button.
+        //     }
+        // }
+        
+
+        // Mouse Leave Handler (listens on the piano container)
+        function handleMouseLeave(event) {
+            // If the mouse leaves the piano container *while* the button is pressed
+            if (isMouseDown && !pianoContainer.contains(event.relatedTarget)) {
+                 // Release all keys visually
+                 keys.forEach(releaseKey);
+                 isMouseDown = false; // Reset the mouse button state
+            }
+        }
+
+        // Touch Start Handler
+        function handleTouchStart(event) {
+            event.preventDefault(); // Prevent default actions like scrolling, zooming
+            // Iterate through each touch point that started in this event
+            for (let i = 0; i < event.changedTouches.length; i++) {
+                const touch = event.changedTouches[i];
+                // Find the element directly under the touch point
+                const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
+                // Find the closest parent element that is a key
+                const targetKey = elementUnderTouch ? elementUnderTouch.closest('.key') : null;
+
+                // Ensure the touch started on a valid key within the piano
+                if (targetKey && pianoContainer.contains(targetKey)) {
+                    const touchId = touch.identifier; // Get unique ID for this touch
+                    activeTouches[touchId] = targetKey; // Store the key associated with this touch ID
+                    pressKey(targetKey); // Press the key visually
+                    // console.log(`Touch Start: ${touchId} on ${targetKey.dataset.key}`);
+                }
+            }
+        }
+
+        // Touch Move Handler
+        function handleTouchMove(event) {
+            event.preventDefault(); // Prevent scrolling while dragging on keys
+            // Iterate through each touch point that moved in this event
+            for (let i = 0; i < event.changedTouches.length; i++) {
+                const touch = event.changedTouches[i];
+                const touchId = touch.identifier;
+
+                // Find the element *currently* under the touch point
+                const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
+                const currentKey = elementUnderTouch ? elementUnderTouch.closest('.key') : null;
+
+                // Check if the current element is a valid key within the piano
+                const isValidKey = currentKey && pianoContainer.contains(currentKey);
+                // Get the key that was previously active for this specific touch
+                const previousKey = activeTouches[touchId];
+
+                // Only process if this touch started on a key (is being tracked)
+                if (previousKey !== undefined) {
+                    // If the key under the touch has changed OR if the touch moved off a key entirely
+                    if (currentKey !== previousKey) {
+                        // Release the previous key visually
+                        releaseKey(previousKey);
+
+                        // If the touch is now over a new valid key, press it and update tracking
+                        if (isValidKey) {
+                            pressKey(currentKey);
+                            activeTouches[touchId] = currentKey; // Update the active key for this touch
+                            // console.log(`Touch Move: ${touchId} moved to ${currentKey.dataset.key}`);
+                        } else {
+                            // Touch moved off the piano or onto a non-key element
+                            activeTouches[touchId] = null; // Mark this touch as not on a key anymore
+                            // console.log(`Touch Move: ${touchId} moved off keys`);
+                        }
+                    }
+                    // else: Touch is still on the same key, do nothing
+                }
+            }
+        }
+
+        // Touch End/Cancel Handler
+        function handleTouchEnd(event) {
+            event.preventDefault();
+            // Iterate through each touch point that ended in this event
+            for (let i = 0; i < event.changedTouches.length; i++) {
+                const touch = event.changedTouches[i];
+                const touchId = touch.identifier;
+                // Get the last key this touch was associated with
+                const lastKey = activeTouches[touchId];
+
+                // Release the last key visually, if there was one
+                releaseKey(lastKey);
+
+                // Remove this touch from the tracking object
+                delete activeTouches[touchId];
+                // console.log(`Touch End/Cancel: ${touchId}`);
+            }
+        }
+
+
+        // --- Attach Event Listeners ---
+
+        // Mouse Events
+        pianoContainer.addEventListener('mousedown', handleMouseDown);
+        document.addEventListener('mouseup', handleMouseUp); // Listen globally for mouseup
+        pianoContainer.addEventListener('mouseleave', handleMouseLeave);
+        // pianoContainer.addEventListener('mousemove', handleMouseMove); // Add if mouse drag is needed
+
+        // Touch Events
+        pianoContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
+        pianoContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
+        pianoContainer.addEventListener('touchend', handleTouchEnd, { passive: false });
+        pianoContainer.addEventListener('touchcancel', handleTouchEnd, { passive: false }); // Treat cancel like end
+
+        // Prevent context menu on long press/right-click
+        pianoContainer.addEventListener('contextmenu', (event) => event.preventDefault());
+
+    </script>
+
+</body>
+</html>
