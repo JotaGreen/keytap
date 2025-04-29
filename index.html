@@ -34,6 +34,93 @@
             overscroll-behavior: none;
         }
 
+        /* --- Loading Screen Styles --- */
+        #loadingScreen {
+            width: 100%;
+            height: 100%;
+            display: flex; /* Use flex to center content */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: #e0e0e0;
+            padding: 20px;
+            text-align: center;
+            z-index: 2000; /* Ensure it's above game container */
+            position: fixed; /* Cover everything */
+            top: 0;
+            left: 0;
+        }
+        #loadingScreen.hidden {
+            display: none; /* Hide when game starts */
+        }
+        #loadingTitle {
+            margin-bottom: 25px;
+            color: #333;
+        }
+        .fileInputContainer {
+            margin-bottom: 15px;
+            width: 100%;
+            max-width: 350px; /* Limit width */
+        }
+        .fileInputContainer label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        .fileInputContainer input[type="file"] {
+            display: block;
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #fff;
+            cursor: pointer;
+        }
+        .fileInputContainer input[type="file"]::file-selector-button {
+            /* Style the button inside the input */
+            padding: 6px 12px;
+            border: 1px solid #aaa;
+            border-radius: 4px;
+            background-color: #eee;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        .fileInputContainer input[type="file"]::file-selector-button:hover {
+            background-color: #ddd;
+        }
+        #loadingStatus {
+            margin-top: 10px;
+            margin-bottom: 20px;
+            color: #666;
+            min-height: 1.2em; /* Reserve space for status */
+        }
+        #startButton {
+            padding: 12px 25px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            border: 1px solid #888;
+            background-color: #cccccc; /* Start disabled */
+            color: #888888;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        #startButton:not(:disabled) {
+            background-color: #4CAF50; /* Green when enabled */
+            color: white;
+            border-color: #3a8f3e;
+        }
+        #startButton:not(:disabled):hover {
+            background-color: #45a049;
+        }
+        #startButton:not(:disabled):active {
+            background-color: #3a8f3e;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.15);
+            transform: translateY(1px);
+        }
+
+
         /* Main game container - Full viewport, column layout by default (portrait) */
         #gameContainer {
             width: 100%;
@@ -41,6 +128,11 @@
             display: flex;
             flex-direction: column; /* Default to portrait layout */
             background-color: #e0e0e0; /* Slightly darker grey for container */
+            /* Initially hidden until files are loaded */
+            visibility: hidden; /* Use visibility to keep layout calculations */
+        }
+        #gameContainer.visible {
+            visibility: visible;
         }
 
         /* --- Layout Sections --- */
@@ -448,6 +540,20 @@
 </head>
 <body>
 
+    <div id="loadingScreen">
+        <h1 id="loadingTitle">Keytap</h1>
+        <div class="fileInputContainer">
+            <label for="audioFile">Select Audio File (.mp3):</label>
+            <input type="file" id="audioFile" accept=".mp3">
+        </div>
+        <div class="fileInputContainer">
+            <label for="notesFile">Select Notes File (.json):</label>
+            <input type="file" id="notesFile" accept=".json">
+        </div>
+        <div id="loadingStatus">Please select both files.</div>
+        <button id="startButton" disabled>Start Game</button>
+    </div>
+
     <div id="gameContainer">
         <div id="infoSection">
             <div id="infoTopRow">
@@ -553,14 +659,16 @@
             } else { console.warn("Eruda not found."); }
         } catch (e) { console.error("Failed to initialize Eruda:", e); }
 
-        // --- Game Settings & State ---
+        // --- Global Variables & State ---
+        // Game Settings & State
         const INITIAL_HEALTH = 50;
         const MAX_HEALTH = 75;
         const MIN_HEALTH = 0;
-        // Default values
+        const PRE_DELAY_SECONDS = 1.0; // Visual lead time before audio starts / first note hits line
+        // Default values (can be changed in settings)
         let SCROLL_SPEED_PIXELS_PER_SECOND = 100;
         let HIT_WINDOW_GOOD_MS = 70;
-        // Derived timing values (will be updated when HIT_WINDOW_GOOD_MS changes)
+        // Derived timing values (updated when HIT_WINDOW_GOOD_MS changes)
         let HIT_WINDOW_PERFECT_MS = HIT_WINDOW_GOOD_MS / 2;
         let HIT_WINDOW_GOOD_SEC = HIT_WINDOW_GOOD_MS / 1000.0;
         let HIT_WINDOW_PERFECT_SEC = HIT_WINDOW_PERFECT_MS / 1000.0;
@@ -572,20 +680,37 @@
         let goodCount = 0;
         let missCount = 0;
         let maxCombo = 0;
-        let totalNotesInSong = 0; // Will be set when notes are loaded
+        let totalNotesInSong = 0; // Set when notes are loaded
         let useColoredNotes = false; // Initial state for color setting
         let noDeathMode = false; // Initial state for no death mode
         let gameIsRunning = false; // Global flag for overall game state (paused/playing)
         let isGameOver = false; // Flag for game over state
+        let gameInitialized = false; // Flag to prevent multiple initializations
+
+        // File Loading State
+        let audioFileBuffer = null; // Will hold ArrayBuffer of the MP3
+        let notesJsonData = null;   // Will hold the parsed JSON object
+        let audioFileLoaded = false;
+        let notesFileLoaded = false;
+
+        // Audio State (managed by audioModule)
+        let audioPauseOffset = 0; // Time offset within the audio buffer where playback was paused
 
         // --- Global DOM Elements ---
+        // Loading Screen
+        const loadingScreen = document.getElementById('loadingScreen');
+        const audioFileInput = document.getElementById('audioFile');
+        const notesFileInput = document.getElementById('notesFile');
+        const loadingStatus = document.getElementById('loadingStatus');
+        const startButton = document.getElementById('startButton');
+        // Game Container
         const gameContainer = document.getElementById('gameContainer');
         const infoSection = document.getElementById('infoSection');
         const staffSection = document.getElementById('staffSection');
         const bottomPanel = document.getElementById('bottomPanel');
         const keyboardSection = document.getElementById('keyboardSection');
         // Info Section Elements
-        const playPauseButton = document.getElementById('playPauseButton'); // Main Play/Pause
+        const playPauseButton = document.getElementById('playPauseButton');
         const settingsButton = document.getElementById('settingsButton');
         const comboCountSpan = document.getElementById('comboCount');
         const healthBarElement = document.getElementById('healthBar');
@@ -710,10 +835,12 @@
             isGameOver = true;
             gameIsRunning = false; // Ensure game state is set to not running
 
-            // Pause the staff module if it exists and is running
+            // Pause audio and visuals
+            if (audioModule) audioModule.pause();
             if (staffModule && staffModule.isRunning()) {
-                staffModule.pause();
+                staffModule.pause(); // This should now also handle stopping the animation loop
             }
+
             // Update button text and disable interactions
             playPauseButton.textContent = songFinished ? "Finished" : "Game Over";
             playPauseButton.disabled = true;
@@ -751,7 +878,7 @@
             console.log("Score screen displayed.");
         }
 
-        /** Resets the game state to its initial values */
+        /** Resets the game state to its initial values for a new game */
         function restartGame() {
             console.log("--- Restarting Game ---");
 
@@ -770,12 +897,18 @@
             maxCombo = 0;
             isGameOver = false;
             gameIsRunning = false; // Start paused
+            audioPauseOffset = 0; // Reset pause offset
 
-            // Reset Staff Module State (if possible)
+            // Reset Audio Module State
+            if (audioModule) {
+                audioModule.stop(); // Ensure any lingering sound stops
+            }
+
+            // Reset Staff Module State
             if (staffModule) {
                 staffModule.resetNotes(); // Reset hit status for all notes
                 staffModule.resetTime();  // Reset displayTime to start
-                staffModule.pause();      // Ensure it's paused
+                staffModule.pause();      // Ensure it's paused visually
                 staffModule.redraw();     // Redraw initial state
             }
 
@@ -788,14 +921,164 @@
             console.log("Game state reset.");
         }
 
+        // --- Audio Module (Web Audio API) ---
+        const audioModule = (() => {
+            console.log("Initializing Audio Module...");
+            let audioContext = null;
+            let audioBuffer = null; // Decoded audio data
+            let sourceNode = null;  // Current audio source playing
+            let isAudioReady = false;
+            let audioStartTime = 0; // When the latest playback started (relative to audioContext.currentTime)
+            let startOffset = 0;    // Offset within the buffer where the latest playback started
+
+            /** Initialize Audio Context and decode audio data */
+            async function init(audioDataArrayBuffer) {
+                if (!audioContext) {
+                    try {
+                        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        console.log("Audio Context created.");
+                    } catch (e) {
+                        console.error("Web Audio API is not supported in this browser.", e);
+                        alert("Error: Web Audio API is not supported in this browser.");
+                        return false;
+                    }
+                }
+
+                isAudioReady = false;
+                audioBuffer = null; // Clear previous buffer
+                console.log("Decoding audio data...");
+                try {
+                    audioBuffer = await audioContext.decodeAudioData(audioDataArrayBuffer);
+                    isAudioReady = true;
+                    console.log(`Audio data decoded successfully. Duration: ${audioBuffer.duration.toFixed(2)}s`);
+                    return true;
+                } catch (e) {
+                    console.error("Error decoding audio data:", e);
+                    alert("Error decoding audio file. Please ensure it's a valid MP3 file.");
+                    return false;
+                }
+            }
+
+            /** Start or resume playback */
+            function play(offset = 0) {
+                if (!isAudioReady || !audioContext || audioContext.state === 'suspended') {
+                    // Attempt to resume context if suspended (e.g., due to user interaction requirement)
+                    if (audioContext && audioContext.state === 'suspended') {
+                        audioContext.resume().then(() => {
+                            console.log("AudioContext resumed.");
+                            play(offset); // Retry play after resuming
+                        }).catch(e => console.error("Failed to resume AudioContext:", e));
+                    } else {
+                        console.warn("Audio not ready or context suspended, cannot play.");
+                    }
+                    return;
+                }
+                if (sourceNode) { // Stop previous source if exists
+                    sourceNode.stop();
+                    sourceNode.disconnect();
+                }
+
+                sourceNode = audioContext.createBufferSource();
+                sourceNode.buffer = audioBuffer;
+                sourceNode.connect(audioContext.destination);
+
+                startOffset = offset; // Store the offset where playback starts
+                audioStartTime = audioContext.currentTime; // Record the context time when starting
+
+                console.log(`Audio: Starting playback at offset: ${startOffset.toFixed(3)}s`);
+                sourceNode.start(0, startOffset); // Start immediately, from the specified offset
+
+                // Handle song end via audio event (more reliable than visual calculation)
+                sourceNode.onended = () => {
+                    // Only trigger game over if the audio played fully or near fully
+                    // Check if the context time when it ended is roughly the expected end time
+                    const playbackDuration = audioContext.currentTime - audioStartTime;
+                    const expectedRemainingDuration = audioBuffer.duration - startOffset;
+                    // Allow a small tolerance (e.g., 0.1s)
+                    if (!isGameOver && playbackDuration >= expectedRemainingDuration - 0.1) {
+                        console.log("Audio source ended naturally (song finished).");
+                        // Check if staffModule is still running - if so, trigger game over
+                        // This prevents triggering if the user manually stopped/restarted
+                        if (staffModule && staffModule.isRunning()) {
+                             triggerGameOver(true); // Song finished successfully
+                        }
+                    } else {
+                        // console.log("Audio source ended (likely due to stop() or pause).");
+                    }
+                    // Clean up the reference
+                    if (sourceNode) {
+                        sourceNode.disconnect();
+                        sourceNode = null;
+                    }
+                };
+            }
+
+            /** Pause playback */
+            function pause() {
+                if (!sourceNode || !isAudioReady || !audioContext) return 0;
+
+                const elapsed = audioContext.currentTime - audioStartTime;
+                const currentOffset = startOffset + elapsed;
+                console.log(`Audio: Pausing at offset: ${currentOffset.toFixed(3)}s`);
+
+                sourceNode.stop(); // Stop playback
+                sourceNode.disconnect();
+                sourceNode = null;
+
+                return currentOffset; // Return the calculated offset where it stopped
+            }
+
+            /** Stop playback completely */
+            function stop() {
+                 if (!sourceNode || !isAudioReady || !audioContext) return;
+                 console.log("Audio: Stopping playback.");
+                 sourceNode.stop();
+                 sourceNode.disconnect();
+                 sourceNode = null;
+                 startOffset = 0; // Reset offset
+                 audioStartTime = 0;
+            }
+
+            /** Get the current playback time within the audio buffer */
+            function getPlaybackTime() {
+                if (!sourceNode || !isAudioReady || !audioContext || audioStartTime === 0) {
+                    // If paused or stopped, return the offset where it was paused/stopped
+                    return startOffset;
+                }
+                // Calculate current time based on when it started and the offset
+                return (audioContext.currentTime - audioStartTime) + startOffset;
+            }
+
+            /** Get the AudioContext time */
+            function getCurrentContextTime() {
+                return audioContext ? audioContext.currentTime : 0;
+            }
+
+            return {
+                init,
+                play,
+                pause,
+                stop,
+                getPlaybackTime,
+                getCurrentContextTime,
+                isReady: () => isAudioReady,
+                resumeContext: () => { // Function to explicitly resume context if needed
+                    if (audioContext && audioContext.state === 'suspended') {
+                        return audioContext.resume();
+                    }
+                    return Promise.resolve(); // Return resolved promise if not suspended
+                }
+            };
+        })();
+
 
         // --- Staff Component Logic ---
         const staffModule = (() => {
             console.log("Initializing Staff Module...");
 
             // --- Configuration Constants ---
-            // Note: SCROLL_SPEED_PIXELS_PER_SECOND and HIT_WINDOW variables are now global
-            const PRE_DELAY_SECONDS = 1.0;
+            // Note: SCROLL_SPEED_PIXELS_PER_SECOND, HIT_WINDOW variables are global
+            // PRE_DELAY_SECONDS is also global now
             const STAFF_LINE_COLOR = '#000000';
             const NOTE_COLOR = '#333333'; // Default note color (black notes mode)
             const ACCIDENTAL_COLOR_BLACK_NOTES = '#888888'; // Gray for accidentals when notes are black
@@ -814,11 +1097,10 @@
             const LEDGER_LINE_EXTENSION = 4;
             const LEDGER_LINE_WIDTH = 1;
             const MIN_DISPLAY_TIME = 0.0;
-            const NOTE_DATA_URL = 'https://raw.githubusercontent.com/JotaGreen/keytap/refs/heads/main/test.json';
             // Perfect Flash Effect
             const PERFECT_FLASH_COLOR = 'rgba(255, 215, 0, 0.7)'; // Gold, semi-transparent
             const PERFECT_FLASH_DURATION_MS = 150; // How long the flash lasts
-            const SONG_END_BUFFER_SEC = 2.0; // How long after the last note ends to trigger song finish
+            const SONG_END_BUFFER_SEC = 2.0; // How long after the last note ends to *visually* consider song finished (audio handles actual end)
 
             // --- DOM Elements (Staff Specific) ---
             const canvas = document.getElementById('staffCanvas');
@@ -834,14 +1116,12 @@
                 return null;
             }
             const devicePixelRatio = window.devicePixelRatio || 1;
-            // console.log(`Staff: Device Pixel Ratio: ${devicePixelRatio}`); // Reduce noise
 
             let canvasWidth = 300; // Logical display width (updated on resize)
             let canvasHeight = 150; // Logical display height (updated on resize)
             let judgmentLineX; // Logical X position (updated on resize)
 
             // --- Staff Geometry & Note Position Mapping ---
-            // console.log("Staff: Calculating staff line Y positions and note mappings..."); // Reduce noise
             const HALF_LINE_SPACING = LINE_SPACING / 2;
             let totalStaffLogicalHeight = 150; // Calculated height
             const staffPositions = {}; // Holds absolute Y coords for staff lines/spaces
@@ -904,14 +1184,14 @@
 
                     // Store the position using the base note name (e.g., "C4", "G5")
                     const baseNoteLetter = noteNames[diatonicDegree];
-                    const baseNoteName = baseNoteLetter + octave;
+                    const baseNoteName = baseNoteLetter + octave; // Correct variable defined here
+                    // FIX: Use baseNoteName instead of baseName
                     if (!(baseNoteName in diatonicNoteYPositions)) {
-                        diatonicNoteYPositions[baseNoteName] = yPos_rel;
+                        diatonicNoteYPositions[baseNoteName] = yPos_rel; // FIX: Use baseNoteName
                         minY_rel = Math.min(minY_rel, yPos_rel);
                         maxY_rel = Math.max(maxY_rel, yPos_rel);
                     }
                 }
-                // console.log("Staff: Relative diatonic note Y positions calculated."); // Reduce noise
 
                 // Calculate total height needed based on highest/lowest note centers + note height + padding
                 const noteHeight = LINE_SPACING; // Note height matches line spacing
@@ -931,27 +1211,27 @@
                     diatonicNoteYPositions[key] += yOffset;
                 }
 
-                console.log(`Staff: Precise Total Staff Logical Height Calculated (Padding: ${STAFF_PADDING.toFixed(1)}px): ${totalStaffLogicalHeight.toFixed(1)}px`);
+                console.log(`Staff: Precise Total Staff Logical Height Calculated: ${totalStaffLogicalHeight.toFixed(1)}px`);
             }
             setupStaffAndNotes(); // Calculate staff geometry and total height once
 
             // --- Note Data Storage ---
             let noteMap = null;
             let notesToDraw = []; // Will contain notes with { ..., y: number, hitStatus: null | 'good' | 'perfect' | 'miss' }
-            let songEndTime = 0; // Time when the last note finishes + buffer
+            let songEndTimeVisual = 0; // Time when the last note finishes + buffer (for visual checks)
 
             // --- State Variables ---
             let isStaffRunning = false; // Internal state for staff animation loop
             let animationFrameId = null;
-            let displayTime = PRE_DELAY_SECONDS; // Current visual time offset from audio time
-            let lastTimestamp = 0; // For calculating delta time
+            let displayTime = 0; // Current visual time, derived from audio time + pre-delay
             let isDragging = false;
             let dragStartX = 0;
-            let dragStartTime = 0;
+            let dragStartTime = 0; // Display time at drag start
             let activeFlashes = []; // To store { y: number, endTime: number } for perfect hit flashes
 
             // --- Note Y Position Lookup Function ---
             function getNoteYPosition(noteName) {
+                // ... (remains the same) ...
                 const baseNameMatch = noteName.match(/([A-G])[#b]?(\d)/);
                 if (baseNameMatch) {
                     const baseName = baseNameMatch[1] + baseNameMatch[2];
@@ -965,6 +1245,7 @@
 
             // --- Helper: Get Pitch Class from Note Name ---
             function getPitchClass(noteName) {
+                // ... (remains the same) ...
                 const match = noteName.match(/([A-G][#b]?)/);
                 if (match) {
                     let pc = match[1];
@@ -982,6 +1263,7 @@
 
             // --- Drawing Functions ---
             function drawStaffLine(y) {
+                // ... (remains the same) ...
                 ctx.beginPath();
                 ctx.moveTo(0, y);
                 ctx.lineTo(canvasWidth, y);
@@ -991,6 +1273,7 @@
             }
 
             function drawGrandStaff() {
+                 // ... (remains the same) ...
                 // Treble Staff Lines (E4, G4, B4, D5, F5)
                 drawStaffLine(staffPositions.E4); drawStaffLine(staffPositions.G4); drawStaffLine(staffPositions.B4); drawStaffLine(staffPositions.D5); drawStaffLine(staffPositions.F5);
                 // Bass Staff Lines (G2, B2, D3, F3, A3)
@@ -998,7 +1281,8 @@
             }
 
             function drawRoundedRect(x, y, width, height, radius) {
-                if (width < 2 * radius) radius = width / 2;
+                // ... (remains the same) ...
+                 if (width < 2 * radius) radius = width / 2;
                 if (height < 2 * radius) radius = height / 2;
                 if (width <= 0 || height <= 0) return; // Don't draw zero/negative size rects
                 ctx.beginPath();
@@ -1012,6 +1296,7 @@
             }
 
             function drawLedgerLines(note, x, noteWidth) {
+                 // ... (remains the same) ...
                 const y = note.y; if (y === null) return;
                 const checkTolerance = HALF_LINE_SPACING / 2; // Tolerance for checking proximity to lines
                 ctx.lineWidth = LEDGER_LINE_WIDTH;
@@ -1037,9 +1322,9 @@
                 }
             }
 
-            /** Draws the accidental symbol (# or b) on top of the note start */
-            function drawAccidental(note, x) { // x is the starting x of the note rectangle
-                const accidental = note.name.includes('#') ? '♯' : note.name.includes('b') ? '♭' : null;
+            function drawAccidental(note, x) {
+                 // ... (remains the same) ...
+                 const accidental = note.name.includes('#') ? '♯' : note.name.includes('b') ? '♭' : null;
                 if (accidental && note.y !== null) {
                     // Set color based on useColoredNotes global variable
                     ctx.fillStyle = useColoredNotes ? ACCIDENTAL_COLOR_COLOR_NOTES : ACCIDENTAL_COLOR_BLACK_NOTES;
@@ -1052,8 +1337,7 @@
                 }
             }
 
-
-            function drawNote(note, currentTime) {
+            function drawNote(note, currentDisplayTime) { // Parameter renamed for clarity
                 // Don't draw if already hit successfully
                 if (note.hitStatus === 'good' || note.hitStatus === 'perfect') {
                     return;
@@ -1062,7 +1346,8 @@
                 if (note.y === null || note.y === undefined) { return; } // Skip notes with invalid Y positions
 
                 const noteY = note.y; // Center Y position
-                const timeUntilJudgment = note.time - currentTime; // Use current time from animation loop
+                // Calculate time relative to the *visual* display time
+                const timeUntilJudgment = note.time - currentDisplayTime;
                 // Use the global SCROLL_SPEED_PIXELS_PER_SECOND
                 const noteX = judgmentLineX + (timeUntilJudgment * SCROLL_SPEED_PIXELS_PER_SECOND);
                 const noteWidth = Math.max(1, note.duration * SCROLL_SPEED_PIXELS_PER_SECOND); // Ensure minimum width of 1px
@@ -1093,6 +1378,7 @@
             }
 
             function drawJudgmentLine() {
+                // ... (remains the same) ...
                  ctx.beginPath();
                  ctx.moveTo(judgmentLineX, 0);
                  ctx.lineTo(judgmentLineX, canvasHeight);
@@ -1101,18 +1387,20 @@
                  ctx.stroke();
             }
 
-            /** Draws active perfect hit flash effects */
-            function drawFlashes(currentTime) {
+            function drawFlashes(currentDisplayTime) { // Parameter renamed
+                 // ... (remains the same, uses currentDisplayTime for endTime check) ...
                 if (activeFlashes.length === 0) return;
 
                 ctx.fillStyle = PERFECT_FLASH_COLOR;
                 const flashHeight = LINE_SPACING * 1.5; // Make flash slightly taller than note
                 const flashWidth = 10; // Fixed width for the flash effect
+                const flashEndTimeContext = audioModule.getCurrentContextTime(); // Use context time for flash expiry
 
                 // Iterate backwards for safe removal
                 for (let i = activeFlashes.length - 1; i >= 0; i--) {
                     const flash = activeFlashes[i];
-                    if (currentTime >= flash.endTime) {
+                    // Check against context time when flash should end
+                    if (flashEndTimeContext >= flash.endTime) {
                         activeFlashes.splice(i, 1); // Remove expired flash
                     } else {
                         // Draw the flash centered vertically on the note's Y
@@ -1127,9 +1415,22 @@
                 }
             }
 
+            /** Main drawing function, called every frame */
+            function redrawCanvas() {
+                if (!ctx || !audioModule) return; // Don't draw if context or audio module not ready
 
-            function redrawCanvas(currentTime) { // Renamed parameter for clarity
-                if (!ctx) return; // Don't draw if context is not available
+                // Calculate current display time based on audio playback time + pre-delay
+                // If game is running, use audio time. If paused, use the time it was paused at.
+                if (gameIsRunning) {
+                     displayTime = audioModule.getPlaybackTime() + PRE_DELAY_SECONDS;
+                } else {
+                    // When paused, displayTime should hold the value it had *at the moment of pausing*.
+                    // This is implicitly handled because the animation loop stops updating it.
+                    // However, if dragging, displayTime is updated by the drag handler.
+                }
+                // Clamp displayTime to minimum value (e.g., 0 or slightly negative if needed)
+                displayTime = Math.max(MIN_DISPLAY_TIME, displayTime);
+
                 ctx.save(); // Save default context state
                 // Clear the canvas (physical pixels)
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1137,66 +1438,53 @@
                 ctx.scale(devicePixelRatio, devicePixelRatio);
 
                 // --- Drawing ---
-                // Draw static elements
                 drawGrandStaff();
                 drawJudgmentLine();
 
-                // Draw dynamic elements (notes)
+                // Draw notes based on the calculated displayTime
                 if (notesToDraw.length > 0) {
-                    // Pass the current displayTime to drawNote
-                    notesToDraw.forEach(note => drawNote(note, currentTime));
+                    notesToDraw.forEach(note => drawNote(note, displayTime));
                 } else {
-                    // Optionally draw a "Loading..." or "No notes" message
+                    // Display message if notes haven't loaded yet
                     ctx.fillStyle = '#888';
                     ctx.font = '16px sans-serif';
                     ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle'; // Center text vertically
-                    ctx.fillText('Loading notes...', canvasWidth / 2, canvasHeight / 2);
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(noteMap ? 'No notes found in track' : 'Loading notes...', canvasWidth / 2, canvasHeight / 2);
                 }
 
-                // Draw perfect hit flashes on top
-                drawFlashes(currentTime);
+                // Draw perfect hit flashes
+                drawFlashes(displayTime);
                 // ---------------
 
                 ctx.restore(); // Restore context state
             }
 
             // --- Animation Loop ---
-            function animationLoop(timestamp) {
+            function animationLoop() { // Timestamp from requestAnimationFrame is no longer the primary source
                 if (!isStaffRunning || isGameOver) { // Stop loop if paused or game over
                      animationFrameId = null;
                      return;
                 }
 
-                const currentTimeSeconds = timestamp / 1000.0;
-                // Calculate time elapsed since last frame, prevent large jumps on pause/resume
-                const deltaTime = lastTimestamp > 0 ? Math.min(0.1, currentTimeSeconds - lastTimestamp) : 0; // Cap delta time
-                displayTime += deltaTime; // Advance the display time
-
-                lastTimestamp = currentTimeSeconds; // Store timestamp for next frame calculation
-
                 // --- Check for Missed Notes ---
-                // Use the global HIT_WINDOW_GOOD_SEC
+                // Use the current displayTime derived from audio
                 const missThresholdTime = displayTime - HIT_WINDOW_GOOD_SEC;
                 notesToDraw.forEach(note => {
                     // Check only notes that haven't been judged yet
                     if (!note.hitStatus && note.time < missThresholdTime) {
                         note.hitStatus = 'miss';
-                        // console.log(`Note Missed: ${note.name} (Time: ${note.time.toFixed(3)}, Display: ${displayTime.toFixed(3)})`); // Reduce noise
-                        // Apply scoring for miss
                         applyScore('miss'); // Call the global scoring function
                     }
                 });
 
-                // --- Check for Song End ---
-                if (songEndTime > 0 && displayTime >= songEndTime) {
-                    triggerGameOver(true); // Pass true indicating song finished
-                    // Loop will terminate because isGameOver is now true
-                }
+                // --- Redraw Canvas ---
+                // displayTime is calculated inside redrawCanvas based on audio time
+                redrawCanvas();
 
-                redrawCanvas(displayTime); // Redraw everything for the new time
-
-                animationFrameId = requestAnimationFrame(animationLoop); // Request next frame
+                // --- Request Next Frame ---
+                // Continue the loop as long as the staff is running
+                animationFrameId = requestAnimationFrame(animationLoop);
             }
 
             // --- Judgment Logic ---
@@ -1206,9 +1494,10 @@
              * @returns {string | null} - 'perfect', 'good', or null if no note was hit.
              */
             function judgeKeyPress(keyName) {
-                if (!isStaffRunning || isGameOver) return null; // Don't judge if paused or game over
+                if (!isStaffRunning || isGameOver || !audioModule) return null; // Don't judge if paused, game over, or audio not ready
 
-                const currentTime = displayTime; // Use the current visual time
+                // Use the *current* display time for judgment window calculation
+                const currentJudgmentTime = displayTime;
                 let hitResult = null; // Track if we hit anything
 
                 // Find the *earliest* unhandled note of the correct pitch class within the "Good" window
@@ -1216,10 +1505,11 @@
                 let minTimeDiff = Infinity;
 
                 for (const note of notesToDraw) {
-                    // Skip notes already handled or too far away in the past/future
+                    // Skip notes already handled
                     if (note.hitStatus) continue;
 
-                    const timeDiff = note.time - currentTime; // Positive if note is in future, negative if in past
+                    // Calculate time difference relative to the *current* display time
+                    const timeDiff = note.time - currentJudgmentTime;
                     const absTimeDiff = Math.abs(timeDiff);
 
                     // Check if within the wider "Good" window (use global variable)
@@ -1227,7 +1517,6 @@
                         // Check if the pitch class matches
                         const notePitchClass = getPitchClass(note.name);
                         if (notePitchClass === keyName) {
-                            // If this note is earlier *or closer to the judgment line* than the current best, select it
                             // Prioritize notes closer to the judgment line (smaller absTimeDiff)
                             if (absTimeDiff < minTimeDiff) {
                                 minTimeDiff = absTimeDiff;
@@ -1239,26 +1528,24 @@
 
                 // If we found a matching note in the window
                 if (bestNote) {
+                     // Get context time for flash effect timing
+                     const flashEndTimeContext = audioModule.getCurrentContextTime() + PERFECT_FLASH_DURATION_MS / 1000.0;
+
                     // Determine Perfect or Good based on the absolute time difference (use global variable)
                     if (minTimeDiff <= HIT_WINDOW_PERFECT_SEC) {
                         bestNote.hitStatus = 'perfect';
                         hitResult = 'perfect';
-                        // console.log(`PERFECT Hit: ${bestNote.name} (Diff: ${minTimeDiff.toFixed(3)}s)`); // Reduce noise
-                        // Trigger flash effect
-                        activeFlashes.push({ y: bestNote.y, endTime: currentTime + PERFECT_FLASH_DURATION_MS / 1000.0 });
-                        // Apply scoring for perfect
+                        // Trigger flash effect - store context time for expiry
+                        activeFlashes.push({ y: bestNote.y, endTime: flashEndTimeContext });
                         applyScore('perfect'); // Call the global scoring function
                     } else {
                         bestNote.hitStatus = 'good';
                         hitResult = 'good';
-                        // console.log(`GOOD Hit: ${bestNote.name} (Diff: ${minTimeDiff.toFixed(3)}s)`); // Reduce noise
-                         // Apply scoring for good
-                        applyScore('good'); // Call the global scoring function
+                         applyScore('good'); // Call the global scoring function
                     }
                 } else {
                     // No matching note found in the window for this key press
-                    // console.log(`Key press ${keyName} - No matching note in window.`); // Reduce noise
-                    // TODO: Optionally apply a penalty for pressing a key when no note is there?
+                    // Optionally apply a penalty here
                 }
 
                 return hitResult; // Return 'perfect', 'good', or null
@@ -1266,16 +1553,24 @@
 
 
             // --- Control Functions (Internal) ---
-            function playAnimationInternal() {
-                if (!isStaffRunning && !isGameOver) { // Don't play if game over
-                    console.log("Staff: Playing animation (Internal)...");
+            function playAnimationInternal(resumeOffset = 0) {
+                if (!isStaffRunning && !isGameOver && audioModule && audioModule.isReady()) {
+                    console.log(`Staff: Playing animation (Internal), resumeOffset: ${resumeOffset.toFixed(3)}`);
                     isStaffRunning = true;
                     canvas.style.cursor = 'default'; // Normal cursor when playing
-                    // Reset timestamp to avoid large jump after pause
-                    lastTimestamp = performance.now() / 1000.0;
-                    if (!animationFrameId) { // Avoid multiple loops if already requested
+
+                    // Start audio playback from the correct offset
+                    audioModule.play(resumeOffset);
+
+                    // Start the visual animation loop if not already running
+                    if (!animationFrameId) {
+                        console.log("Staff: Starting animation frame loop.");
+                        // Reset display time calculation basis before starting loop
+                        displayTime = resumeOffset + PRE_DELAY_SECONDS;
                         animationFrameId = requestAnimationFrame(animationLoop);
                     }
+                } else {
+                    console.warn("Staff: Cannot play - already running, game over, or audio not ready.");
                 }
             }
 
@@ -1284,9 +1579,18 @@
                     console.log("Staff: Pausing animation (Internal)...");
                     isStaffRunning = false; // Flag checked by animationLoop to stop
                     canvas.style.cursor = 'grab'; // Grab cursor when paused/draggable
-                    // Clear lastTimestamp to calculate fresh delta on resume
-                    lastTimestamp = 0;
+
+                    // Stop the animation frame loop
+                    if (animationFrameId) {
+                        cancelAnimationFrame(animationFrameId);
+                        animationFrameId = null;
+                        console.log("Staff: Stopped animation frame loop.");
+                    }
+
+                    // Pause the audio and return the offset
+                    return audioModule ? audioModule.pause() : 0;
                 }
+                return 0; // Return 0 if not running
             }
 
             /** Resets the hit status of all notes */
@@ -1296,44 +1600,37 @@
                 activeFlashes = []; // Clear any active flashes
             }
 
-            /** Resets the display time to the beginning */
+            /** Resets the display time to the beginning (visual start) */
             function resetTimeInternal() {
                  console.log("Staff: Resetting display time.");
+                 // Reset visual time to the pre-delay state
                  displayTime = PRE_DELAY_SECONDS;
-                 lastTimestamp = 0; // Reset last timestamp for delta calculation
+                 // Audio offset is handled separately by restartGame/playPause logic
             }
 
             // --- Event Handlers ---
             function handleResize() {
-                // console.log("Staff: Handling resize..."); // Reduce noise
-                // Get the available dimensions of the container element
+                // ... (Resize logic remains the same) ...
                 const displayWidth = staffSection.offsetWidth;
                 const displayHeight = staffSection.offsetHeight;
 
-                // Ensure dimensions are valid before proceeding
                 if (displayWidth <= 0 || displayHeight <= 0) {
                     console.warn("Staff: Resize called with zero or negative dimensions. Skipping redraw.");
                     return;
                 }
 
-                // Set logical canvas width to fill container
                 canvasWidth = displayWidth;
-                // Use the pre-calculated logical height, but cap it at the container's actual height
                 canvasHeight = Math.min(displayHeight, totalStaffLogicalHeight);
 
-                // Adjust canvas buffer size for pixel density
                 canvas.width = Math.round(canvasWidth * devicePixelRatio);
                 canvas.height = Math.round(canvasHeight * devicePixelRatio);
 
-                // Set canvas display size using CSS
                 canvas.style.width = `${canvasWidth}px`;
                 canvas.style.height = `${canvasHeight}px`;
 
-                // Recalculate judgment line logical X position based on new canvasWidth
                 judgmentLineX = canvasWidth * (JUDGMENT_LINE_X_PERCENT / 100);
 
-                // console.log(`Staff: Canvas resized - Container: ${displayWidth}x${displayHeight}, Logical: ${canvasWidth.toFixed(0)}x${canvasHeight.toFixed(1)}px, Buffer: ${canvas.width}x${canvas.height}px`); // Reduce noise
-                redrawCanvas(displayTime); // Redraw immediately with new dimensions
+                redrawCanvas(); // Redraw immediately with new dimensions and current displayTime
             }
 
             function getEventX(event) { return event.touches ? event.touches[0].clientX : event.clientX; }
@@ -1342,31 +1639,33 @@
                 // Only allow dragging if the game is NOT running and NOT over
                 if (!isStaffRunning && !isGameOver) {
                     isDragging = true;
-                    // Calculate starting X relative to the canvas element's bounding box
                     dragStartX = getEventX(event) - canvas.getBoundingClientRect().left;
-                    dragStartTime = displayTime; // Store time at drag start
-                    canvas.classList.add('dragging'); // Add class for styling
-                    // Prevent default only if the event target is the canvas itself
+                    // Store the *visual* display time at the start of the drag
+                    dragStartTime = displayTime;
+                    canvas.classList.add('dragging');
                     if (event.target === canvas) {
-                         event.preventDefault(); // Prevent text selection, etc.
+                         event.preventDefault();
                     }
                 }
             }
 
             function handleDragMove(event) {
-                if (isDragging) { // Dragging state implies game is paused and not over
+                if (isDragging) {
                     const currentX = getEventX(event) - canvas.getBoundingClientRect().left;
-                    const deltaX = currentX - dragStartX; // Pixel difference from start
-
-                    // Convert pixel delta to time delta (negative because dragging right moves time backward)
-                    // Use the global SCROLL_SPEED_PIXELS_PER_SECOND
+                    const deltaX = currentX - dragStartX;
                     const deltaTimeOffset = deltaX / SCROLL_SPEED_PIXELS_PER_SECOND;
 
-                    // Calculate new display time, clamping at the minimum allowed time
+                    // Calculate new *visual* display time based on drag
+                    // Clamp at the minimum allowed time (e.g., 0)
                     displayTime = Math.max(MIN_DISPLAY_TIME, dragStartTime - deltaTimeOffset);
 
-                    redrawCanvas(displayTime); // Redraw canvas at the new time
-                    // Prevent default only if the event target is the canvas itself
+                    // Update the audio pause offset to match the dragged visual time
+                    // audioPauseOffset = displayTime - PRE_DELAY_SECONDS;
+                    // Clamp audio offset to valid range (0 to audio duration)
+                    // audioPauseOffset = Math.max(0, audioPauseOffset);
+                    // TODO: Need audioBuffer duration here if clamping is desired. For now, just sync visual.
+
+                    redrawCanvas(); // Redraw canvas at the new visual time
                     if (event.target === canvas) {
                          event.preventDefault();
                     }
@@ -1377,27 +1676,23 @@
                 if (isDragging) {
                     isDragging = false;
                     canvas.classList.remove('dragging');
-                    // Prevent default only if the event target is the canvas itself
+                    // IMPORTANT: Update the global audioPauseOffset based on the final dragged displayTime
+                    audioPauseOffset = Math.max(0, displayTime - PRE_DELAY_SECONDS); // Ensure non-negative
+                    console.log(`Staff: Drag ended. New audio pause offset: ${audioPauseOffset.toFixed(3)}`);
                     if (event.target === canvas) {
                         event.preventDefault();
                     }
                 }
             }
 
-            // --- Initialization ---
-            async function loadNoteData() {
-                 console.log(`Staff: Loading note data from: ${NOTE_DATA_URL}`);
+            // --- Initialization & Data Loading ---
+            /** Loads and processes note data from the provided JSON object */
+            function loadNoteData(jsonData) {
+                 console.log(`Staff: Processing provided note data...`);
                  try {
-                      const response = await fetch(NOTE_DATA_URL);
-                      if (!response.ok) {
-                          throw new Error(`HTTP error! status: ${response.status}`);
-                      }
-                      const jsonData = await response.json(); // Parse JSON response
+                      noteMap = jsonData; // Assign the parsed JSON data
 
-                      noteMap = jsonData; // Assign the fetched data
-                      console.log("Staff: Note data loaded successfully via fetch.");
-
-                      // Process notes from the first track ONLY, as per specs
+                      // Process notes from the first track ONLY
                       if (noteMap && noteMap.tracks && noteMap.tracks.length > 0 && noteMap.tracks[0].notes) {
                          const rawNotes = noteMap.tracks[0].notes;
                          console.log(`Staff: Found ${rawNotes.length} notes in the first track.`);
@@ -1412,6 +1707,8 @@
                                  if (noteEndTime > lastNoteEndTime) {
                                      lastNoteEndTime = noteEndTime;
                                  }
+                                 // Add the PRE_DELAY_SECONDS to the note's time to align with visual start
+                                 // NO! The displayTime calculation handles the offset. Note times are absolute audio times.
                                  return {
                                      ...note,
                                      y: yPos,
@@ -1420,39 +1717,52 @@
                              })
                              .filter(note => note.y !== null); // Filter out notes where Y lookup failed
 
-                         songEndTime = lastNoteEndTime + SONG_END_BUFFER_SEC; // Set song end time
-                         console.log(`Staff: Processed ${rawNotes.length} notes, ${notesToDraw.length} remain after Y position lookup and filtering. Calculated song end time: ${songEndTime.toFixed(3)}s`);
+                         // songEndTimeVisual = lastNoteEndTime + SONG_END_BUFFER_SEC + PRE_DELAY_SECONDS; // Visual end time
+                         songEndTimeVisual = lastNoteEndTime + SONG_END_BUFFER_SEC; // Visual end time based on audio time
+                         console.log(`Staff: Processed ${rawNotes.length} notes, ${notesToDraw.length} remain after Y position lookup. Calculated visual song end time: ${songEndTimeVisual.toFixed(3)}s`);
 
-                         // Sort notes by start time for efficient processing/drawing
+                         // Sort notes by start time
                          notesToDraw.sort((a, b) => a.time - b.time);
-                         // console.log("Staff: Notes sorted by start time."); // Reduce noise
 
                       } else {
-                          console.error("Staff Error: Fetched note data is missing tracks[0] or tracks[0].notes, or has an invalid format.");
+                          console.error("Staff Error: Provided note data is missing tracks[0] or tracks[0].notes, or has an invalid format.");
                           notesToDraw = [];
                           totalNotesInSong = 0;
-                          songEndTime = 0;
+                          songEndTimeVisual = 0;
+                          // Optionally show an error to the user on the canvas
+                          redrawCanvas(); // Redraw to show potential error message
+                          return false; // Indicate failure
                       }
+                      return true; // Indicate success
                  } catch (error) {
-                     console.error("Staff: Fatal Error loading or processing note data:", error);
-                     notesToDraw = []; // Ensure notesToDraw is empty on error
+                     console.error("Staff: Fatal Error processing note data:", error);
+                     alert("Error processing notes file. Please ensure it's a valid Keytap JSON file.");
+                     notesToDraw = [];
                      totalNotesInSong = 0;
-                     songEndTime = 0;
+                     songEndTimeVisual = 0;
+                     redrawCanvas(); // Redraw to show potential error message
+                     return false; // Indicate failure
                  }
              }
 
             // Public init function for the module
-            async function init() {
+            function init(noteDataJson) { // Accept parsed JSON data
                 console.log("Staff Module: Initializing...");
-                // Verify getMidiNoteColor function exists
                 if (typeof getMidiNoteColor !== 'function') {
                     console.error("Staff CRITICAL: getMidiNoteColor function NOT FOUND.");
                 }
 
-                await loadNoteData(); // Load data from URL
+                // Load note data immediately
+                const notesLoaded = loadNoteData(noteDataJson);
+                if (!notesLoaded) {
+                    console.error("Staff Module: Failed to load note data during init.");
+                    // Initialization fails if notes don't load
+                    return false;
+                }
+
                 handleResize(); // Set initial size
-                displayTime = PRE_DELAY_SECONDS; // Set initial view time
-                redrawCanvas(displayTime); // Draw initial frame
+                displayTime = PRE_DELAY_SECONDS; // Set initial visual time (before audio starts)
+                redrawCanvas(); // Draw initial frame
 
                 // Add event listeners (Dragging only)
                 canvas.addEventListener('mousedown', handleDragStart);
@@ -1464,6 +1774,7 @@
                 window.addEventListener('touchcancel', handleDragEnd);
 
                 console.log("Staff Module: Initialization complete.");
+                return true; // Indicate successful initialization
             }
 
             // --- Public Interface ---
@@ -1472,7 +1783,7 @@
                 handleResize,
                 play: playAnimationInternal,
                 pause: pauseAnimationInternal,
-                redraw: () => redrawCanvas(displayTime), // Expose redraw for color changes
+                redraw: redrawCanvas, // Expose redraw for color/settings changes
                 isRunning: () => isStaffRunning, // Expose running state
                 judgeKeyPress: judgeKeyPress, // Expose judgment function
                 resetNotes: resetNotesInternal, // Expose note reset function
@@ -1504,13 +1815,22 @@
                 if (keyElement && !keyElement.classList.contains('pressed')) {
                     keyElement.classList.add('pressed');
                     const keyName = keyElement.dataset.key;
-                    // console.log(`Keyboard: Pressed: ${keyName}`); // Reduce noise
 
                     // Call the judgment function if it exists and game is running
-                    if (judgeFunction && gameIsRunning) { // Only judge if game is running
-                        judgeFunction(keyName);
+                    if (judgeFunction && gameIsRunning) { // Only judge if game is running visually/audibly
+                        // Before judging, ensure AudioContext is running (required for touch interactions)
+                        if (audioModule) {
+                             audioModule.resumeContext().then(() => {
+                                 // Context is running, now judge
+                                 judgeFunction(keyName);
+                             });
+                        } else {
+                            console.warn("Keyboard: Audio module not available for context check.");
+                            judgeFunction(keyName); // Attempt judgment anyway
+                        }
                     } else if (!gameIsRunning) {
-                         // console.log("Keyboard: Key pressed but game is paused."); // Reduce noise
+                         // Key pressed while paused - potentially provide visual feedback only?
+                         // console.log("Keyboard: Key pressed but game is paused.");
                     } else {
                         console.warn("Keyboard: Judge function not available!");
                     }
@@ -1520,73 +1840,54 @@
             function releaseKey(keyElement) {
                 if (keyElement && keyElement.classList.contains('pressed')) {
                     keyElement.classList.remove('pressed');
-                    // console.log(`Keyboard: Released: ${keyElement.dataset.key}`);
                 }
             }
 
             // --- Event Handlers ---
+            // Mouse handlers remain largely the same...
             function handleMouseDown(event) {
-                // Ensure it's the primary mouse button (usually left)
                 if (event.button !== 0) return;
-
                 const targetKey = event.target.closest('.key');
-                // Check if the click was on a valid key within this piano container
                 if (targetKey && pianoContainer.contains(targetKey)) {
-                    isMouseDown = true; // Set the flag indicating the mouse button is down *for the keyboard*
-                    pressKey(targetKey); // Press the key visually and trigger judgment
-                    event.preventDefault(); // Prevent potential text selection or dragging page
+                    isMouseDown = true;
+                    pressKey(targetKey);
+                    event.preventDefault();
                 }
             }
-
             function handleMouseUp(event) {
-                // Ensure it's the primary mouse button
                 if (event.button !== 0) return;
-
-                // If the mouse button was down *for the keyboard*
                 if (isMouseDown) {
-                    // Release all keys visually within this piano
                     keys.forEach(releaseKey);
-                    isMouseDown = false; // Reset the keyboard's mouse button state
+                    isMouseDown = false;
                 }
             }
-
-             // Mouse Leave Handler (listens on the specific piano container)
             function handleMouseLeave(event) {
-                // If the mouse leaves the piano container *while* the button is pressed *for the keyboard*
                 if (isMouseDown && event.target === pianoContainer) {
-                    // Release all keys visually for this piano
                     keys.forEach(releaseKey);
-                    isMouseDown = false; // Reset the keyboard's mouse button state
+                    isMouseDown = false;
                 }
             }
 
-            // --- Touch Handlers ---
-            function handleTouchStart(event) {
-                // Prevent default actions ONLY if the touch starts directly on a key
+            // Touch handlers remain largely the same...
+             function handleTouchStart(event) {
                 const initialTargetKey = event.target.closest('.key');
                  if (initialTargetKey && pianoContainer.contains(initialTargetKey)) {
-                     event.preventDefault(); // Prevent scroll/zoom ONLY when starting on a key
+                     event.preventDefault();
                  }
-
                 for (let i = 0; i < event.changedTouches.length; i++) {
                     const touch = event.changedTouches[i];
-                    // Find the element directly under the touch point
                     const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
                     const targetKey = elementUnderTouch ? elementUnderTouch.closest('.key') : null;
-
-                    // Ensure the touch started on a valid key within this piano
                     if (targetKey && pianoContainer.contains(targetKey)) {
-                        const touchId = touch.identifier; // Get unique ID for this touch
+                        const touchId = touch.identifier;
                         if (!activeTouches[touchId]) {
-                            activeTouches[touchId] = targetKey; // Store the key associated with this touch ID
-                            pressKey(targetKey); // Press the key visually and trigger judgment
+                            activeTouches[touchId] = targetKey;
+                            pressKey(targetKey); // This now handles the audio context resume check
                         }
                     }
                 }
             }
-
             function handleTouchMove(event) {
-                 // Prevent default actions ONLY if one of the moved touches is currently active on a key
                  let shouldPreventDefault = false;
                  for (let i = 0; i < event.changedTouches.length; i++) {
                      const touch = event.changedTouches[i];
@@ -1596,45 +1897,30 @@
                      }
                  }
                  if (shouldPreventDefault) {
-                     event.preventDefault(); // Prevent scrolling while dragging over keys
+                     event.preventDefault();
                  }
-
-
                 for (let i = 0; i < event.changedTouches.length; i++) {
                     const touch = event.changedTouches[i];
                     const touchId = touch.identifier;
-
-                    // Find the element *currently* under the touch point
                     const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
                     const currentKey = elementUnderTouch ? elementUnderTouch.closest('.key') : null;
-
-                    // Check if the current element is a valid key within this piano
                     const isValidKey = currentKey && pianoContainer.contains(currentKey);
-                    // Get the key that was previously active for this specific touch
                     const previousKey = activeTouches[touchId];
 
-                    // Only process if this touch started on a key (is being tracked)
                     if (previousKey !== undefined) {
-                        // If the key under the touch has changed OR if the touch moved off a key entirely
                         if (currentKey !== previousKey) {
-                            // Release the previous key visually (if it exists)
                             releaseKey(previousKey);
-
-                            // If the touch is now over a new valid key, press it and update tracking
                             if (isValidKey) {
-                                activeTouches[touchId] = currentKey; // Update the active key for this touch
-                                pressKey(currentKey); // Press the NEW key visually and trigger judgment
+                                activeTouches[touchId] = currentKey;
+                                pressKey(currentKey); // Handles audio context check
                             } else {
-                                // Touch moved off the piano or onto a non-key element
-                                activeTouches[touchId] = null; // Mark this touch as not on a key anymore (but keep tracking ID until touchend)
+                                activeTouches[touchId] = null;
                             }
                         }
                     }
                 }
             }
-
             function handleTouchEndOrCancel(event) {
-                // Prevent default only if the ending touch was active on a key
                 let shouldPreventDefault = false;
                 for (let i = 0; i < event.changedTouches.length; i++) {
                     const touch = event.changedTouches[i];
@@ -1646,17 +1932,11 @@
                 if (shouldPreventDefault) {
                     event.preventDefault();
                 }
-
                 for (let i = 0; i < event.changedTouches.length; i++) {
                     const touch = event.changedTouches[i];
                     const touchId = touch.identifier;
-                    // Get the last key this touch was associated with
                     const lastKey = activeTouches[touchId];
-
-                    // Release the last key visually, if there was one
                     releaseKey(lastKey);
-
-                    // Remove this touch from the tracking object
                     delete activeTouches[touchId];
                 }
             }
@@ -1668,7 +1948,7 @@
 
                 // --- Attach Event Listeners ---
                 pianoContainer.addEventListener('mousedown', handleMouseDown);
-                document.addEventListener('mouseup', handleMouseUp);
+                document.addEventListener('mouseup', handleMouseUp); // Listen on document for mouseup outside piano
                 pianoContainer.addEventListener('mouseleave', handleMouseLeave);
                 pianoContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
                 pianoContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
@@ -1689,32 +1969,29 @@
         // --- Global UI Update Functions ---
         /** Updates the health bar and combo display */
         function updateInfoUI() {
-            // Update Combo Count
+            // ... (remains the same) ...
             if (comboCountSpan) {
                 comboCountSpan.textContent = comboCount;
             }
-
-            // Update Health Bar
             if (healthBarElement) {
                 const healthPercentage = Math.max(0, Math.min(100, (playerHealth / MAX_HEALTH) * 100));
                 healthBarElement.style.width = `${healthPercentage}%`;
-                // Optional: Change color based on health
                 if (healthPercentage <= 0) {
-                     healthBarElement.style.backgroundColor = '#555555'; // Dark grey when empty
+                     healthBarElement.style.backgroundColor = '#555555';
                 } else if (healthPercentage < 25) {
-                    healthBarElement.style.backgroundColor = '#f44336'; // Red
+                    healthBarElement.style.backgroundColor = '#f44336';
                 } else if (healthPercentage < 50) {
-                    healthBarElement.style.backgroundColor = '#ff9800'; // Orange
+                    healthBarElement.style.backgroundColor = '#ff9800';
                 } else {
-                    healthBarElement.style.backgroundColor = '#4CAF50'; // Green
+                    healthBarElement.style.backgroundColor = '#4CAF50';
                 }
             }
-            // console.log(`UI Updated: Health=${playerHealth}/${MAX_HEALTH}, Combo=${comboCount}`); // Reduce console noise
         }
 
         /** Updates the displayed values in the settings panel */
         function updateSettingsUI() {
-            if (staffScaleValueSpan) {
+            // ... (remains the same) ...
+             if (staffScaleValueSpan) {
                 staffScaleValueSpan.textContent = SCROLL_SPEED_PIXELS_PER_SECOND;
             }
             if (hitWindowValueSpan) {
@@ -1733,26 +2010,19 @@
 
         /** Handles layout adjustments needed on orientation change or resize */
         function handleLayoutChange() {
+            // ... (remains the same) ...
             const orientation = window.matchMedia("(orientation: landscape)").matches ? 'landscape' : 'portrait';
-            // console.log(`Layout Check. Orientation: ${orientation}`); // Reduce noise
-
-            // Move infoSection into bottomPanel for landscape, or back to gameContainer for portrait
             if (orientation === 'landscape') {
                 if (infoSection.parentElement !== bottomPanel) {
-                    bottomPanel.insertBefore(infoSection, keyboardSection); // Place info before keyboard
-                    // console.log("Moved infoSection into bottomPanel for landscape."); // Reduce noise
+                    bottomPanel.insertBefore(infoSection, keyboardSection);
                 }
             } else { // Portrait
                 if (infoSection.parentElement === bottomPanel) {
-                    gameContainer.insertBefore(infoSection, staffSection); // Place info before staff
-                    // console.log("Moved infoSection back to gameContainer for portrait."); // Reduce noise
+                    gameContainer.insertBefore(infoSection, staffSection);
                 }
             }
-
-            // Trigger resize for staff canvas after potential layout shifts
             if (staffModule && typeof staffModule.handleResize === 'function') {
-                 setTimeout(staffModule.handleResize, 50); // Short delay
-                 // console.log("Scheduled staff resize."); // Reduce noise
+                 setTimeout(staffModule.handleResize, 50);
             } else {
                 console.warn("Could not trigger staff resize after layout change.");
             }
@@ -1760,71 +2030,108 @@
 
         /** Recalculates derived timing variables when HIT_WINDOW_GOOD_MS changes */
         function updateTimingWindows() {
-            HIT_WINDOW_PERFECT_MS = Math.floor(HIT_WINDOW_GOOD_MS / 2); // Ensure perfect is half
+            // ... (remains the same) ...
+            HIT_WINDOW_PERFECT_MS = Math.floor(HIT_WINDOW_GOOD_MS / 2);
             HIT_WINDOW_GOOD_SEC = HIT_WINDOW_GOOD_MS / 1000.0;
             HIT_WINDOW_PERFECT_SEC = HIT_WINDOW_PERFECT_MS / 1000.0;
             console.log(`Timing windows updated: Good=${HIT_WINDOW_GOOD_MS}ms, Perfect=${HIT_WINDOW_PERFECT_MS}ms`);
         }
 
 
-        /** Main initialization function */
-        async function initializeGame() {
+        /** Initializes all game modules and sets up event listeners AFTER files are loaded */
+        async function initializeGame(loadedAudioBuffer, loadedNoteData) {
+            if (gameInitialized) {
+                console.warn("Game already initialized. Skipping.");
+                return;
+            }
             console.log("--- Initializing Keytap Game ---");
+            loadingStatus.textContent = "Initializing audio...";
 
-            // Initialize Modules
-            // Staff module needs to be initialized first as keyboard needs its judge function
-            if (staffModule) await staffModule.init(); else console.error("Staff module failed to load.");
+            // 1. Initialize Audio Module
+            if (!audioModule) {
+                 console.error("Audio module failed to load.");
+                 loadingStatus.textContent = "Error: Audio module failed.";
+                 startButton.disabled = false; // Re-enable start? Or show error permanently?
+                 return;
+            }
+            const audioInitialized = await audioModule.init(loadedAudioBuffer);
+            if (!audioInitialized) {
+                console.error("Audio module initialization failed (decoding error).");
+                loadingStatus.textContent = "Error: Failed to decode audio.";
+                 startButton.disabled = false; // Allow retry?
+                 return;
+            }
+            loadingStatus.textContent = "Initializing visuals...";
 
-            // Pass the judgeKeyPress function from staff to keyboard during initialization
-            if (keyboardModule && staffModule && typeof staffModule.judgeKeyPress === 'function') {
-                 keyboardModule.init(staffModule.judgeKeyPress);
-            } else {
-                console.error("Keyboard module or staff judge function failed to load/initialize.");
+            // 2. Initialize Staff Module (pass note data)
+            if (!staffModule) {
+                 console.error("Staff module failed to load.");
+                 loadingStatus.textContent = "Error: Staff module failed.";
+                 return;
+            }
+            // Pass the already parsed JSON object
+            const staffInitialized = staffModule.init(loadedNoteData);
+             if (!staffInitialized) {
+                console.error("Staff module initialization failed (note processing error).");
+                loadingStatus.textContent = "Error: Failed to process notes file.";
+                 return;
             }
 
+            // 3. Initialize Keyboard Module (pass judge function)
+            if (!keyboardModule || typeof staffModule.judgeKeyPress !== 'function') {
+                console.error("Keyboard module or staff judge function failed to load/initialize.");
+                 loadingStatus.textContent = "Error: Keyboard module failed.";
+                return;
+            }
+            keyboardModule.init(staffModule.judgeKeyPress);
 
-            // Set initial UI states
+
+            // 4. Set initial UI states
             updateInfoUI(); // Set initial health bar and combo
             updateSettingsUI(); // Set initial settings display
 
-            // Set initial layout based on current orientation/size
-            handleLayoutChange();
+            // 5. Set initial layout based on current orientation/size
+            handleLayoutChange(); // Call this AFTER game container is visible
 
-            // --- Add Global Event Listeners ---
+            // 6. Add Global Event Listeners ---
 
             // Play/Pause Button
-            if (playPauseButton && staffModule) {
+            if (playPauseButton && staffModule && audioModule) {
                 playPauseButton.addEventListener('click', () => {
                     if (isGameOver) return; // Don't allow play/pause after game over
 
-                    if (gameIsRunning) {
-                        staffModule.pause();
-                        playPauseButton.textContent = "Play";
-                        gameIsRunning = false;
-                    } else {
-                        staffModule.play();
-                        playPauseButton.textContent = "Pause";
-                        gameIsRunning = true;
-                    }
-                    console.log(`Play/Pause toggled. Game running: ${gameIsRunning}`);
+                     // Ensure AudioContext is running (user gesture required)
+                     audioModule.resumeContext().then(() => {
+                         if (gameIsRunning) {
+                             // Pause the game
+                             audioPauseOffset = staffModule.pause(); // Pause visuals & audio, get offset
+                             playPauseButton.textContent = "Play";
+                             gameIsRunning = false;
+                             console.log(`Game Paused. Audio offset: ${audioPauseOffset.toFixed(3)}`);
+                         } else {
+                             // Play the game (from the beginning or resume)
+                             staffModule.play(audioPauseOffset); // Play visuals & audio from offset
+                             playPauseButton.textContent = "Pause";
+                             gameIsRunning = true;
+                             console.log(`Game Playing. Resuming from offset: ${audioPauseOffset.toFixed(3)}`);
+                         }
+                     }).catch(e => console.error("Failed to resume AudioContext on play/pause:", e));
                 });
             }
 
             // Settings Button
-            if (settingsButton && settingsOverlay && staffModule) {
+            if (settingsButton && settingsOverlay && staffModule && audioModule) {
                 settingsButton.addEventListener('click', () => {
-                    if (isGameOver) return; // Don't allow settings after game over
+                    if (isGameOver) return;
                     console.log("Settings button clicked.");
                     // Pause the game first if it's running
                     if (gameIsRunning) {
-                        staffModule.pause();
+                        audioPauseOffset = staffModule.pause(); // Pause visuals & audio
                         playPauseButton.textContent = "Play"; // Update main button text
                         gameIsRunning = false;
                         console.log("Paused game for settings.");
                     }
-                    // Ensure settings UI reflects current values before showing
                     updateSettingsUI();
-                    // Show overlay
                     settingsOverlay.classList.add('visible');
                 });
             }
@@ -1835,6 +2142,10 @@
                     settingsOverlay.classList.remove('visible');
                     console.log("Settings overlay closed.");
                     // Leave paused. User must press Play again.
+                    // Ensure the staff redraws if settings changed while paused
+                    if (!gameIsRunning && staffModule) {
+                        staffModule.redraw();
+                    }
                 });
             }
 
@@ -1843,8 +2154,7 @@
                  colorToggleSwitch.addEventListener('change', (event) => {
                      useColoredNotes = event.target.checked;
                      console.log(`Color notes setting changed: ${useColoredNotes}`);
-                     // Immediately redraw the staff with the new setting
-                     staffModule.redraw();
+                     staffModule.redraw(); // Immediately redraw
                  });
              }
 
@@ -1864,32 +2174,32 @@
                  staffScaleDownButton.addEventListener('click', () => {
                      SCROLL_SPEED_PIXELS_PER_SECOND = Math.max(STAFF_SCALE_MIN, SCROLL_SPEED_PIXELS_PER_SECOND - STAFF_SCALE_STEP);
                      updateSettingsUI();
-                     staffModule.redraw(); // Redraw needed to see effect if paused
+                     staffModule.redraw();
                  });
              }
              if (staffScaleUpButton) {
                  staffScaleUpButton.addEventListener('click', () => {
                      SCROLL_SPEED_PIXELS_PER_SECOND = Math.min(STAFF_SCALE_MAX, SCROLL_SPEED_PIXELS_PER_SECOND + STAFF_SCALE_STEP);
                      updateSettingsUI();
-                     staffModule.redraw(); // Redraw needed to see effect if paused
+                     staffModule.redraw();
                  });
              }
 
              // Settings: Hit Window Adjustment
              const HIT_WINDOW_STEP = 5;
-             const HIT_WINDOW_MIN = 30; // Min Good window (Perfect will be 15)
-             const HIT_WINDOW_MAX = 150; // Max Good window (Perfect will be 75)
+             const HIT_WINDOW_MIN = 30;
+             const HIT_WINDOW_MAX = 150;
              if (hitWindowDownButton) {
                  hitWindowDownButton.addEventListener('click', () => {
                      HIT_WINDOW_GOOD_MS = Math.max(HIT_WINDOW_MIN, HIT_WINDOW_GOOD_MS - HIT_WINDOW_STEP);
-                     updateTimingWindows(); // Recalculate dependent variables
+                     updateTimingWindows();
                      updateSettingsUI();
                  });
              }
               if (hitWindowUpButton) {
                  hitWindowUpButton.addEventListener('click', () => {
                      HIT_WINDOW_GOOD_MS = Math.min(HIT_WINDOW_MAX, HIT_WINDOW_GOOD_MS + HIT_WINDOW_STEP);
-                     updateTimingWindows(); // Recalculate dependent variables
+                     updateTimingWindows();
                      updateSettingsUI();
                  });
              }
@@ -1897,7 +2207,10 @@
 
              // Score Screen: Restart Button
              if (restartButton) {
-                 restartButton.addEventListener('click', restartGame);
+                 // Remove previous listener if any (to prevent duplicates if init runs again)
+                 const newRestartButton = restartButton.cloneNode(true);
+                 restartButton.parentNode.replaceChild(newRestartButton, restartButton);
+                 newRestartButton.addEventListener('click', restartGame);
              }
 
             // Orientation Change Listener
@@ -1908,17 +2221,165 @@
             window.addEventListener('resize', () => {
                 clearTimeout(resizeTimeout);
                 resizeTimeout = setTimeout(() => {
-                    // console.log("Window resize detected, running layout check."); // Reduce noise
                     handleLayoutChange();
-                }, 150); // Wait 150ms after last resize event
+                }, 150);
             });
 
+            gameInitialized = true;
             console.log("--- Keytap Game Initialization Complete ---");
+            loadingStatus.textContent = "Ready!"; // Or clear the status
         }
 
-        // --- Entry Point ---
-        window.addEventListener('load', initializeGame);
-        console.log("Global: window.onload event listener added for initializeGame.");
+        // --- File Loading Logic ---
+
+        /** Checks if both files are loaded and updates the start button state */
+        function checkFilesLoaded() {
+            if (audioFileLoaded && notesFileLoaded) {
+                loadingStatus.textContent = "Files loaded. Ready to start!";
+                startButton.disabled = false;
+                console.log("Both files loaded and validated.");
+            } else {
+                startButton.disabled = true;
+                // Update status based on which file is missing
+                if (!audioFileLoaded && !notesFileLoaded) {
+                    loadingStatus.textContent = "Please select both files.";
+                } else if (!audioFileLoaded) {
+                    loadingStatus.textContent = "Please select an MP3 audio file.";
+                } else {
+                    loadingStatus.textContent = "Please select a JSON notes file.";
+                }
+            }
+        }
+
+        /** Handles audio file selection */
+        function handleAudioFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                audioFileLoaded = false;
+                audioFileBuffer = null;
+                checkFilesLoaded();
+                return;
+            }
+
+            // Basic type check (more robust checks can be added)
+            if (!file.type.startsWith('audio/mpeg') && !file.name.toLowerCase().endsWith('.mp3')) {
+                alert("Invalid audio file type. Please select an MP3 file.");
+                event.target.value = ''; // Clear the input
+                audioFileLoaded = false;
+                audioFileBuffer = null;
+                checkFilesLoaded();
+                return;
+            }
+
+            loadingStatus.textContent = "Loading audio file...";
+            startButton.disabled = true; // Disable while loading
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                audioFileBuffer = e.target.result; // Store ArrayBuffer
+                audioFileLoaded = true;
+                console.log("Audio file loaded into ArrayBuffer.");
+                checkFilesLoaded();
+            };
+            reader.onerror = (e) => {
+                console.error("Error reading audio file:", e);
+                alert("Error reading audio file.");
+                audioFileLoaded = false;
+                audioFileBuffer = null;
+                checkFilesLoaded();
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        /** Handles notes file selection */
+        function handleNotesFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                notesFileLoaded = false;
+                notesJsonData = null;
+                checkFilesLoaded();
+                return;
+            }
+
+            // Basic type check
+             if (!file.type.startsWith('application/json') && !file.name.toLowerCase().endsWith('.json')) {
+                alert("Invalid notes file type. Please select a JSON file.");
+                event.target.value = ''; // Clear the input
+                notesFileLoaded = false;
+                notesJsonData = null;
+                checkFilesLoaded();
+                return;
+            }
+
+            loadingStatus.textContent = "Loading notes file...";
+            startButton.disabled = true; // Disable while loading
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    notesJsonData = JSON.parse(e.target.result); // Parse JSON text
+                    // Basic validation of JSON structure (can be expanded)
+                    if (!notesJsonData || !notesJsonData.tracks || !Array.isArray(notesJsonData.tracks)) {
+                         throw new Error("Invalid JSON structure: Missing 'tracks' array.");
+                    }
+                    notesFileLoaded = true;
+                    console.log("Notes file loaded and parsed successfully.");
+                    checkFilesLoaded();
+                } catch (error) {
+                    console.error("Error parsing JSON file:", error);
+                    alert(`Error parsing JSON file: ${error.message}`);
+                    notesFileLoaded = false;
+                    notesJsonData = null;
+                    checkFilesLoaded();
+                }
+            };
+            reader.onerror = (e) => {
+                console.error("Error reading notes file:", e);
+                alert("Error reading notes file.");
+                notesFileLoaded = false;
+                notesJsonData = null;
+                checkFilesLoaded();
+            };
+            reader.readAsText(file);
+        }
+
+        // --- Entry Point & Loading Screen Setup ---
+        window.addEventListener('load', () => {
+            console.log("Window loaded. Setting up file inputs.");
+
+            if (!audioFileInput || !notesFileInput || !startButton || !loadingScreen || !gameContainer) {
+                console.error("CRITICAL: Loading screen or game container elements not found!");
+                alert("Error: Could not initialize the game interface.");
+                return;
+            }
+
+            // Add file input listeners
+            audioFileInput.addEventListener('change', handleAudioFileSelect);
+            notesFileInput.addEventListener('change', handleNotesFileSelect);
+
+            // Add start button listener
+            startButton.addEventListener('click', async () => {
+                if (audioFileLoaded && notesFileLoaded) {
+                    console.log("Start button clicked. Hiding loading screen.");
+                    startButton.disabled = true; // Prevent double clicks
+                    loadingStatus.textContent = "Starting game...";
+
+                    // Hide loading screen and show game container
+                    loadingScreen.classList.add('hidden');
+                    gameContainer.classList.add('visible'); // Make game container visible
+
+                    // Initialize the game with the loaded data
+                    await initializeGame(audioFileBuffer, notesJsonData);
+                } else {
+                    console.warn("Start button clicked but files not ready.");
+                    checkFilesLoaded(); // Update status message
+                }
+            });
+
+            // Initial check in case files are pre-selected (e.g., browser refresh)
+            checkFilesLoaded();
+        });
+        console.log("Global: window.onload event listener added for loading screen setup.");
 
     </script>
 
