@@ -599,7 +599,7 @@
                 <label for="staffScaleValue">Staff Scale (px/s)</label>
                 <div class="setting-control">
                     <button id="staffScaleDown" class="control-button adjust-button">-</button>
-                    <span id="staffScaleValue" class="setting-value">100</span>
+                    <span id="staffScaleValue" class="setting-value">120</span>
                     <button id="staffScaleUp" class="control-button adjust-button">+</button>
                 </div>
             </div>
@@ -607,7 +607,7 @@
                 <label for="hitWindowValue">Hit Window (ms)</label>
                  <div class="setting-control">
                     <button id="hitWindowDown" class="control-button adjust-button">-</button>
-                    <span id="hitWindowValue" class="setting-value">70</span>
+                    <span id="hitWindowValue" class="setting-value">140</span>
                     <button id="hitWindowUp" class="control-button adjust-button">+</button>
                 </div>
             </div>
@@ -664,10 +664,12 @@
         const INITIAL_HEALTH = 50;
         const MAX_HEALTH = 75;
         const MIN_HEALTH = 0;
-        const PRE_DELAY_SECONDS = 1.0; // Visual lead time before audio starts / first note hits line
+        const PRE_DELAY_SECONDS = 1.0; // Delay before audio *starts* after visuals begin scrolling
         // Default values (can be changed in settings)
-        let SCROLL_SPEED_PIXELS_PER_SECOND = 100;
-        let HIT_WINDOW_GOOD_MS = 70;
+        // CHANGE: Update default staff scale
+        let SCROLL_SPEED_PIXELS_PER_SECOND = 120;
+        // CHANGE: Update default hit window
+        let HIT_WINDOW_GOOD_MS = 140;
         // Derived timing values (updated when HIT_WINDOW_GOOD_MS changes)
         let HIT_WINDOW_PERFECT_MS = HIT_WINDOW_GOOD_MS / 2;
         let HIT_WINDOW_GOOD_SEC = HIT_WINDOW_GOOD_MS / 1000.0;
@@ -741,7 +743,8 @@
         // --- Scoring Constants ---
         const ENERGY_PERFECT = 2;
         const ENERGY_GOOD = 0; // No base energy for good hits
-        const ENERGY_MISS = -10;
+        // CHANGE: Update miss penalty
+        const ENERGY_MISS = -5;
 
         /**
          * Calculates the combo bonus energy based on the current combo count.
@@ -779,7 +782,7 @@
             } else if (hitType === 'miss') {
                 missCount++;
                 comboBroken = true;
-                baseEnergyChange = ENERGY_MISS;
+                baseEnergyChange = ENERGY_MISS; // Uses the updated constant
             }
 
             // Update Max Combo
@@ -836,7 +839,7 @@
             gameIsRunning = false; // Ensure game state is set to not running
 
             // Pause audio and visuals
-            if (audioModule) audioModule.pause();
+            if (audioModule) audioModule.pause(); // Use pause to store final offset potentially
             if (staffModule && staffModule.isRunning()) {
                 staffModule.pause(); // This should now also handle stopping the animation loop
             }
@@ -901,13 +904,13 @@
 
             // Reset Audio Module State
             if (audioModule) {
-                audioModule.stop(); // Ensure any lingering sound stops
+                audioModule.stop(); // Ensure any lingering sound stops and resets offset
             }
 
             // Reset Staff Module State
             if (staffModule) {
                 staffModule.resetNotes(); // Reset hit status for all notes
-                staffModule.resetTime();  // Reset displayTime to start
+                staffModule.resetTime();  // Reset displayTime to 0
                 staffModule.pause();      // Ensure it's paused visually
                 staffModule.redraw();     // Redraw initial state
             }
@@ -923,13 +926,15 @@
 
         // --- Audio Module (Web Audio API) ---
         const audioModule = (() => {
+            // ... (Audio module remains the same as previous version) ...
             console.log("Initializing Audio Module...");
             let audioContext = null;
             let audioBuffer = null; // Decoded audio data
             let sourceNode = null;  // Current audio source playing
             let isAudioReady = false;
-            let audioStartTime = 0; // When the latest playback started (relative to audioContext.currentTime)
-            let startOffset = 0;    // Offset within the buffer where the latest playback started
+            let isAudioPlaying = false; // Flag to track if audio is currently playing or scheduled
+            let audioContextStartTime = 0; // Actual context time when playback *actually* began or is scheduled to begin
+            let startOffset = 0;    // Offset within the buffer where the latest playback started/resumed
 
             /** Initialize Audio Context and decode audio data */
             async function init(audioDataArrayBuffer) {
@@ -948,6 +953,8 @@
                 audioBuffer = null; // Clear previous buffer
                 console.log("Decoding audio data...");
                 try {
+                    // Ensure context is running before decoding (good practice)
+                    await resumeContext();
                     audioBuffer = await audioContext.decodeAudioData(audioDataArrayBuffer);
                     isAudioReady = true;
                     console.log(`Audio data decoded successfully. Duration: ${audioBuffer.duration.toFixed(2)}s`);
@@ -962,96 +969,135 @@
             /** Start or resume playback */
             function play(offset = 0) {
                 if (!isAudioReady || !audioContext || audioContext.state === 'suspended') {
-                    // Attempt to resume context if suspended (e.g., due to user interaction requirement)
                     if (audioContext && audioContext.state === 'suspended') {
-                        audioContext.resume().then(() => {
-                            console.log("AudioContext resumed.");
+                        resumeContext().then(() => {
+                            console.log("AudioContext resumed during play attempt.");
                             play(offset); // Retry play after resuming
-                        }).catch(e => console.error("Failed to resume AudioContext:", e));
+                        }).catch(e => console.error("Failed to resume AudioContext during play:", e));
                     } else {
                         console.warn("Audio not ready or context suspended, cannot play.");
                     }
                     return;
                 }
-                if (sourceNode) { // Stop previous source if exists
-                    sourceNode.stop();
+                if (sourceNode) { // Stop previous source if it exists (e.g., rapid pause/play)
+                    try { sourceNode.stop(); } catch (e) { /* Ignore error if already stopped */ }
                     sourceNode.disconnect();
+                    sourceNode = null; // Ensure clean slate
                 }
 
                 sourceNode = audioContext.createBufferSource();
                 sourceNode.buffer = audioBuffer;
                 sourceNode.connect(audioContext.destination);
 
-                startOffset = offset; // Store the offset where playback starts
-                audioStartTime = audioContext.currentTime; // Record the context time when starting
+                startOffset = offset; // Store the offset where playback should start within the buffer
 
-                console.log(`Audio: Starting playback at offset: ${startOffset.toFixed(3)}s`);
-                sourceNode.start(0, startOffset); // Start immediately, from the specified offset
+                // Calculate when the audio should actually start playing in the context timeline
+                const delay = (startOffset === 0 && PRE_DELAY_SECONDS > 0) ? PRE_DELAY_SECONDS : 0;
+                audioContextStartTime = audioContext.currentTime + delay; // Schedule start time
 
-                // Handle song end via audio event (more reliable than visual calculation)
+                console.log(`Audio: Scheduling playback start at context time: ${audioContextStartTime.toFixed(3)}s (Delay: ${delay.toFixed(3)}s) from buffer offset: ${startOffset.toFixed(3)}s`);
+                sourceNode.start(audioContextStartTime, startOffset); // Schedule start
+                isAudioPlaying = true; // Mark as playing (or scheduled to play)
+
                 sourceNode.onended = () => {
+                    const wasPlaying = isAudioPlaying; // Store state before clearing
+                    isAudioPlaying = false; // Mark as not playing
+
                     // Only trigger game over if the audio played fully or near fully
-                    // Check if the context time when it ended is roughly the expected end time
-                    const playbackDuration = audioContext.currentTime - audioStartTime;
+                    // and if the game wasn't already stopped/paused manually
+                    const playbackDuration = audioContext.currentTime - audioContextStartTime;
                     const expectedRemainingDuration = audioBuffer.duration - startOffset;
-                    // Allow a small tolerance (e.g., 0.1s)
-                    if (!isGameOver && playbackDuration >= expectedRemainingDuration - 0.1) {
-                        console.log("Audio source ended naturally (song finished).");
-                        // Check if staffModule is still running - if so, trigger game over
-                        // This prevents triggering if the user manually stopped/restarted
-                        if (staffModule && staffModule.isRunning()) {
-                             triggerGameOver(true); // Song finished successfully
-                        }
+
+                    if (wasPlaying && !isGameOver && playbackDuration >= 0 && playbackDuration >= expectedRemainingDuration - 0.1) {
+                         console.log("Audio source ended naturally (song finished).");
+                         if (staffModule && staffModule.isRunning()) {
+                              triggerGameOver(true); // Song finished successfully
+                         }
                     } else {
-                        // console.log("Audio source ended (likely due to stop() or pause).");
-                    }
-                    // Clean up the reference
-                    if (sourceNode) {
-                        sourceNode.disconnect();
-                        sourceNode = null;
+                         // console.log("Audio source ended (likely due to stop() or pause).");
                     }
                 };
             }
 
             /** Pause playback */
             function pause() {
-                if (!sourceNode || !isAudioReady || !audioContext) return 0;
+                // Use getPlaybackTime to calculate where we are *before* stopping
+                const currentOffset = getPlaybackTime();
 
-                const elapsed = audioContext.currentTime - audioStartTime;
-                const currentOffset = startOffset + elapsed;
-                console.log(`Audio: Pausing at offset: ${currentOffset.toFixed(3)}s`);
+                if (!sourceNode || !isAudioReady || !audioContext || !isAudioPlaying) {
+                    // If not playing, return the last known offset
+                    return startOffset;
+                }
 
-                sourceNode.stop(); // Stop playback
+                console.log(`Audio: Pausing at calculated offset: ${currentOffset.toFixed(3)}s`);
+
+                try {
+                    sourceNode.stop(); // Stop playback
+                } catch (e) {
+                    console.warn("Audio: Error stopping source node (might be already stopped):", e);
+                }
                 sourceNode.disconnect();
                 sourceNode = null;
+                isAudioPlaying = false;
+                startOffset = currentOffset; // Update startOffset to the paused position
 
-                return currentOffset; // Return the calculated offset where it stopped
+                return startOffset; // Return the offset where it stopped
             }
 
             /** Stop playback completely */
             function stop() {
-                 if (!sourceNode || !isAudioReady || !audioContext) return;
+                 if (!sourceNode || !isAudioReady || !audioContext) {
+                    // If already stopped or not ready, just ensure state is reset
+                    isAudioPlaying = false;
+                    startOffset = 0;
+                    audioContextStartTime = 0;
+                    sourceNode = null; // Ensure reference is cleared
+                    return;
+                 }
                  console.log("Audio: Stopping playback.");
-                 sourceNode.stop();
+                 try {
+                     sourceNode.stop();
+                 } catch (e) {
+                     console.warn("Audio: Error stopping source node (might be already stopped):", e);
+                 }
                  sourceNode.disconnect();
                  sourceNode = null;
+                 isAudioPlaying = false;
                  startOffset = 0; // Reset offset
-                 audioStartTime = 0;
+                 audioContextStartTime = 0;
             }
+
 
             /** Get the current playback time within the audio buffer */
             function getPlaybackTime() {
-                if (!sourceNode || !isAudioReady || !audioContext || audioStartTime === 0) {
-                    // If paused or stopped, return the offset where it was paused/stopped
+                if (!isAudioPlaying || !audioContext || audioContextStartTime === 0) {
+                    // If paused, stopped, or not yet started (during initial delay), return the offset
                     return startOffset;
                 }
-                // Calculate current time based on when it started and the offset
-                return (audioContext.currentTime - audioStartTime) + startOffset;
+                // Calculate elapsed time since the *scheduled* start time
+                const elapsedSinceScheduledStart = audioContext.currentTime - audioContextStartTime;
+
+                // If the current time is before the scheduled start, playback hasn't begun, return the initial offset
+                if (elapsedSinceScheduledStart < 0) {
+                    return startOffset;
+                }
+
+                // Otherwise, return the starting offset plus the time elapsed since the actual start
+                return startOffset + elapsedSinceScheduledStart;
             }
 
             /** Get the AudioContext time */
             function getCurrentContextTime() {
                 return audioContext ? audioContext.currentTime : 0;
+            }
+
+            /** Resumes the AudioContext if it's suspended */
+            function resumeContext() {
+                if (audioContext && audioContext.state === 'suspended') {
+                    console.log("Audio: Attempting to resume suspended AudioContext...");
+                    return audioContext.resume(); // Returns a promise
+                }
+                return Promise.resolve(); // Return resolved promise if not suspended or not initialized
             }
 
             return {
@@ -1062,23 +1108,17 @@
                 getPlaybackTime,
                 getCurrentContextTime,
                 isReady: () => isAudioReady,
-                resumeContext: () => { // Function to explicitly resume context if needed
-                    if (audioContext && audioContext.state === 'suspended') {
-                        return audioContext.resume();
-                    }
-                    return Promise.resolve(); // Return resolved promise if not suspended
-                }
+                resumeContext // Expose resume function
             };
         })();
 
 
         // --- Staff Component Logic ---
         const staffModule = (() => {
+            // ... (Staff module remains the same as previous version) ...
             console.log("Initializing Staff Module...");
 
             // --- Configuration Constants ---
-            // Note: SCROLL_SPEED_PIXELS_PER_SECOND, HIT_WINDOW variables are global
-            // PRE_DELAY_SECONDS is also global now
             const STAFF_LINE_COLOR = '#000000';
             const NOTE_COLOR = '#333333'; // Default note color (black notes mode)
             const ACCIDENTAL_COLOR_BLACK_NOTES = '#888888'; // Gray for accidentals when notes are black
@@ -1096,7 +1136,7 @@
             const ACCIDENTAL_FONT_SIZE = LINE_SPACING * 1.2;
             const LEDGER_LINE_EXTENSION = 4;
             const LEDGER_LINE_WIDTH = 1;
-            const MIN_DISPLAY_TIME = 0.0;
+            const MIN_DISPLAY_TIME = 0.0; // Visual time should not go below 0
             // Perfect Flash Effect
             const PERFECT_FLASH_COLOR = 'rgba(255, 215, 0, 0.7)'; // Gold, semi-transparent
             const PERFECT_FLASH_DURATION_MS = 150; // How long the flash lasts
@@ -1131,7 +1171,7 @@
 
             /** Calculates staff geometry, note Y positions, and total canvas height */
             function setupStaffAndNotes() {
-                // Relative Y positions (Top line F5 is 0)
+                 // Relative Y positions (Top line F5 is 0)
                 let currentY_rel = 0;
                 const staffPositions_rel = {};
                 staffPositions_rel.F5 = currentY_rel; // Top line treble
@@ -1184,10 +1224,9 @@
 
                     // Store the position using the base note name (e.g., "C4", "G5")
                     const baseNoteLetter = noteNames[diatonicDegree];
-                    const baseNoteName = baseNoteLetter + octave; // Correct variable defined here
-                    // FIX: Use baseNoteName instead of baseName
+                    const baseNoteName = baseNoteLetter + octave;
                     if (!(baseNoteName in diatonicNoteYPositions)) {
-                        diatonicNoteYPositions[baseNoteName] = yPos_rel; // FIX: Use baseNoteName
+                        diatonicNoteYPositions[baseNoteName] = yPos_rel;
                         minY_rel = Math.min(minY_rel, yPos_rel);
                         maxY_rel = Math.max(maxY_rel, yPos_rel);
                     }
@@ -1223,7 +1262,7 @@
             // --- State Variables ---
             let isStaffRunning = false; // Internal state for staff animation loop
             let animationFrameId = null;
-            let displayTime = 0; // Current visual time, derived from audio time + pre-delay
+            let displayTime = 0; // Current visual time, NOW directly reflects audio time
             let isDragging = false;
             let dragStartX = 0;
             let dragStartTime = 0; // Display time at drag start
@@ -1231,7 +1270,6 @@
 
             // --- Note Y Position Lookup Function ---
             function getNoteYPosition(noteName) {
-                // ... (remains the same) ...
                 const baseNameMatch = noteName.match(/([A-G])[#b]?(\d)/);
                 if (baseNameMatch) {
                     const baseName = baseNameMatch[1] + baseNameMatch[2];
@@ -1245,7 +1283,6 @@
 
             // --- Helper: Get Pitch Class from Note Name ---
             function getPitchClass(noteName) {
-                // ... (remains the same) ...
                 const match = noteName.match(/([A-G][#b]?)/);
                 if (match) {
                     let pc = match[1];
@@ -1263,7 +1300,6 @@
 
             // --- Drawing Functions ---
             function drawStaffLine(y) {
-                // ... (remains the same) ...
                 ctx.beginPath();
                 ctx.moveTo(0, y);
                 ctx.lineTo(canvasWidth, y);
@@ -1273,7 +1309,6 @@
             }
 
             function drawGrandStaff() {
-                 // ... (remains the same) ...
                 // Treble Staff Lines (E4, G4, B4, D5, F5)
                 drawStaffLine(staffPositions.E4); drawStaffLine(staffPositions.G4); drawStaffLine(staffPositions.B4); drawStaffLine(staffPositions.D5); drawStaffLine(staffPositions.F5);
                 // Bass Staff Lines (G2, B2, D3, F3, A3)
@@ -1281,7 +1316,6 @@
             }
 
             function drawRoundedRect(x, y, width, height, radius) {
-                // ... (remains the same) ...
                  if (width < 2 * radius) radius = width / 2;
                 if (height < 2 * radius) radius = height / 2;
                 if (width <= 0 || height <= 0) return; // Don't draw zero/negative size rects
@@ -1296,7 +1330,6 @@
             }
 
             function drawLedgerLines(note, x, noteWidth) {
-                 // ... (remains the same) ...
                 const y = note.y; if (y === null) return;
                 const checkTolerance = HALF_LINE_SPACING / 2; // Tolerance for checking proximity to lines
                 ctx.lineWidth = LEDGER_LINE_WIDTH;
@@ -1323,7 +1356,6 @@
             }
 
             function drawAccidental(note, x) {
-                 // ... (remains the same) ...
                  const accidental = note.name.includes('#') ? '♯' : note.name.includes('b') ? '♭' : null;
                 if (accidental && note.y !== null) {
                     // Set color based on useColoredNotes global variable
@@ -1337,7 +1369,7 @@
                 }
             }
 
-            function drawNote(note, currentDisplayTime) { // Parameter renamed for clarity
+            function drawNote(note, currentDisplayTime) { // Parameter is audio time now
                 // Don't draw if already hit successfully
                 if (note.hitStatus === 'good' || note.hitStatus === 'perfect') {
                     return;
@@ -1346,7 +1378,7 @@
                 if (note.y === null || note.y === undefined) { return; } // Skip notes with invalid Y positions
 
                 const noteY = note.y; // Center Y position
-                // Calculate time relative to the *visual* display time
+                // Calculate time relative to the *current audio time* (currentDisplayTime)
                 const timeUntilJudgment = note.time - currentDisplayTime;
                 // Use the global SCROLL_SPEED_PIXELS_PER_SECOND
                 const noteX = judgmentLineX + (timeUntilJudgment * SCROLL_SPEED_PIXELS_PER_SECOND);
@@ -1378,7 +1410,6 @@
             }
 
             function drawJudgmentLine() {
-                // ... (remains the same) ...
                  ctx.beginPath();
                  ctx.moveTo(judgmentLineX, 0);
                  ctx.lineTo(judgmentLineX, canvasHeight);
@@ -1387,8 +1418,7 @@
                  ctx.stroke();
             }
 
-            function drawFlashes(currentDisplayTime) { // Parameter renamed
-                 // ... (remains the same, uses currentDisplayTime for endTime check) ...
+            function drawFlashes(currentDisplayTime) { // Parameter is audio time
                 if (activeFlashes.length === 0) return;
 
                 ctx.fillStyle = PERFECT_FLASH_COLOR;
@@ -1419,16 +1449,9 @@
             function redrawCanvas() {
                 if (!ctx || !audioModule) return; // Don't draw if context or audio module not ready
 
-                // Calculate current display time based on audio playback time + pre-delay
-                // If game is running, use audio time. If paused, use the time it was paused at.
-                if (gameIsRunning) {
-                     displayTime = audioModule.getPlaybackTime() + PRE_DELAY_SECONDS;
-                } else {
-                    // When paused, displayTime should hold the value it had *at the moment of pausing*.
-                    // This is implicitly handled because the animation loop stops updating it.
-                    // However, if dragging, displayTime is updated by the drag handler.
-                }
-                // Clamp displayTime to minimum value (e.g., 0 or slightly negative if needed)
+                // Calculate current display time based DIRECTLY on audio playback time
+                displayTime = audioModule.getPlaybackTime();
+                // Clamp displayTime to minimum value (e.g., 0)
                 displayTime = Math.max(MIN_DISPLAY_TIME, displayTime);
 
                 ctx.save(); // Save default context state
@@ -1441,7 +1464,7 @@
                 drawGrandStaff();
                 drawJudgmentLine();
 
-                // Draw notes based on the calculated displayTime
+                // Draw notes based on the calculated displayTime (audio time)
                 if (notesToDraw.length > 0) {
                     notesToDraw.forEach(note => drawNote(note, displayTime));
                 } else {
@@ -1461,15 +1484,15 @@
             }
 
             // --- Animation Loop ---
-            function animationLoop() { // Timestamp from requestAnimationFrame is no longer the primary source
+            function animationLoop() {
                 if (!isStaffRunning || isGameOver) { // Stop loop if paused or game over
                      animationFrameId = null;
                      return;
                 }
 
                 // --- Check for Missed Notes ---
-                // Use the current displayTime derived from audio
-                const missThresholdTime = displayTime - HIT_WINDOW_GOOD_SEC;
+                // Use the current displayTime (audio time) for checking misses
+                const missThresholdTime = displayTime - HIT_WINDOW_GOOD_SEC; // Time when note is too far past judgment line
                 notesToDraw.forEach(note => {
                     // Check only notes that haven't been judged yet
                     if (!note.hitStatus && note.time < missThresholdTime) {
@@ -1496,7 +1519,7 @@
             function judgeKeyPress(keyName) {
                 if (!isStaffRunning || isGameOver || !audioModule) return null; // Don't judge if paused, game over, or audio not ready
 
-                // Use the *current* display time for judgment window calculation
+                // Use the *current audio time* (displayTime) for judgment window calculation
                 const currentJudgmentTime = displayTime;
                 let hitResult = null; // Track if we hit anything
 
@@ -1508,7 +1531,7 @@
                     // Skip notes already handled
                     if (note.hitStatus) continue;
 
-                    // Calculate time difference relative to the *current* display time
+                    // Calculate time difference relative to the *current audio time*
                     const timeDiff = note.time - currentJudgmentTime;
                     const absTimeDiff = Math.abs(timeDiff);
 
@@ -1559,14 +1582,12 @@
                     isStaffRunning = true;
                     canvas.style.cursor = 'default'; // Normal cursor when playing
 
-                    // Start audio playback from the correct offset
+                    // Start audio playback from the correct offset (audioModule handles the delay)
                     audioModule.play(resumeOffset);
 
                     // Start the visual animation loop if not already running
                     if (!animationFrameId) {
                         console.log("Staff: Starting animation frame loop.");
-                        // Reset display time calculation basis before starting loop
-                        displayTime = resumeOffset + PRE_DELAY_SECONDS;
                         animationFrameId = requestAnimationFrame(animationLoop);
                     }
                 } else {
@@ -1590,7 +1611,7 @@
                     // Pause the audio and return the offset
                     return audioModule ? audioModule.pause() : 0;
                 }
-                return 0; // Return 0 if not running
+                return audioModule ? audioModule.getPlaybackTime() : 0; // Return current time if already paused
             }
 
             /** Resets the hit status of all notes */
@@ -1600,17 +1621,16 @@
                 activeFlashes = []; // Clear any active flashes
             }
 
-            /** Resets the display time to the beginning (visual start) */
+            /** Resets the display time to the beginning (visual start = audio start = 0) */
             function resetTimeInternal() {
                  console.log("Staff: Resetting display time.");
-                 // Reset visual time to the pre-delay state
-                 displayTime = PRE_DELAY_SECONDS;
-                 // Audio offset is handled separately by restartGame/playPause logic
+                 // Reset visual time to 0 (start of audio)
+                 displayTime = 0;
+                 // Audio offset is reset in global restartGame function via audioModule.stop()
             }
 
             // --- Event Handlers ---
             function handleResize() {
-                // ... (Resize logic remains the same) ...
                 const displayWidth = staffSection.offsetWidth;
                 const displayHeight = staffSection.offsetHeight;
 
@@ -1640,7 +1660,7 @@
                 if (!isStaffRunning && !isGameOver) {
                     isDragging = true;
                     dragStartX = getEventX(event) - canvas.getBoundingClientRect().left;
-                    // Store the *visual* display time at the start of the drag
+                    // Store the *audio time* (displayTime) at the start of the drag
                     dragStartTime = displayTime;
                     canvas.classList.add('dragging');
                     if (event.target === canvas) {
@@ -1655,17 +1675,11 @@
                     const deltaX = currentX - dragStartX;
                     const deltaTimeOffset = deltaX / SCROLL_SPEED_PIXELS_PER_SECOND;
 
-                    // Calculate new *visual* display time based on drag
-                    // Clamp at the minimum allowed time (e.g., 0)
+                    // Calculate new *audio time* (displayTime) based on drag
+                    // Clamp at the minimum allowed time (0)
                     displayTime = Math.max(MIN_DISPLAY_TIME, dragStartTime - deltaTimeOffset);
 
-                    // Update the audio pause offset to match the dragged visual time
-                    // audioPauseOffset = displayTime - PRE_DELAY_SECONDS;
-                    // Clamp audio offset to valid range (0 to audio duration)
-                    // audioPauseOffset = Math.max(0, audioPauseOffset);
-                    // TODO: Need audioBuffer duration here if clamping is desired. For now, just sync visual.
-
-                    redrawCanvas(); // Redraw canvas at the new visual time
+                    redrawCanvas(); // Redraw canvas at the new audio time
                     if (event.target === canvas) {
                          event.preventDefault();
                     }
@@ -1676,8 +1690,8 @@
                 if (isDragging) {
                     isDragging = false;
                     canvas.classList.remove('dragging');
-                    // IMPORTANT: Update the global audioPauseOffset based on the final dragged displayTime
-                    audioPauseOffset = Math.max(0, displayTime - PRE_DELAY_SECONDS); // Ensure non-negative
+                    // Update the global audioPauseOffset based on the final dragged audio time (displayTime)
+                    audioPauseOffset = Math.max(0, displayTime); // Ensure non-negative
                     console.log(`Staff: Drag ended. New audio pause offset: ${audioPauseOffset.toFixed(3)}`);
                     if (event.target === canvas) {
                         event.preventDefault();
@@ -1707,8 +1721,7 @@
                                  if (noteEndTime > lastNoteEndTime) {
                                      lastNoteEndTime = noteEndTime;
                                  }
-                                 // Add the PRE_DELAY_SECONDS to the note's time to align with visual start
-                                 // NO! The displayTime calculation handles the offset. Note times are absolute audio times.
+                                 // Note times remain absolute audio times
                                  return {
                                      ...note,
                                      y: yPos,
@@ -1717,7 +1730,6 @@
                              })
                              .filter(note => note.y !== null); // Filter out notes where Y lookup failed
 
-                         // songEndTimeVisual = lastNoteEndTime + SONG_END_BUFFER_SEC + PRE_DELAY_SECONDS; // Visual end time
                          songEndTimeVisual = lastNoteEndTime + SONG_END_BUFFER_SEC; // Visual end time based on audio time
                          console.log(`Staff: Processed ${rawNotes.length} notes, ${notesToDraw.length} remain after Y position lookup. Calculated visual song end time: ${songEndTimeVisual.toFixed(3)}s`);
 
@@ -1729,7 +1741,6 @@
                           notesToDraw = [];
                           totalNotesInSong = 0;
                           songEndTimeVisual = 0;
-                          // Optionally show an error to the user on the canvas
                           redrawCanvas(); // Redraw to show potential error message
                           return false; // Indicate failure
                       }
@@ -1756,12 +1767,12 @@
                 const notesLoaded = loadNoteData(noteDataJson);
                 if (!notesLoaded) {
                     console.error("Staff Module: Failed to load note data during init.");
-                    // Initialization fails if notes don't load
-                    return false;
+                    return false; // Initialization fails if notes don't load
                 }
 
                 handleResize(); // Set initial size
-                displayTime = PRE_DELAY_SECONDS; // Set initial visual time (before audio starts)
+                // Set initial visual time to 0 (start of audio)
+                displayTime = 0;
                 redrawCanvas(); // Draw initial frame
 
                 // Add event listeners (Dragging only)
@@ -1794,6 +1805,7 @@
 
         // --- Keyboard Component Logic ---
         const keyboardModule = (() => {
+            // ... (Keyboard module remains the same as previous version) ...
             console.log("Initializing Keyboard Module...");
 
             // --- DOM Elements (Keyboard Specific) ---
@@ -1963,7 +1975,6 @@
             return {
                 init
             };
-
         })(); // Immediately invoke the keyboard module function
 
         // --- Global UI Update Functions ---
@@ -1990,8 +2001,10 @@
 
         /** Updates the displayed values in the settings panel */
         function updateSettingsUI() {
-            // ... (remains the same) ...
-             if (staffScaleValueSpan) {
+            // Update derived timing values before updating UI
+            updateTimingWindows(); // Ensure perfect window is updated if good window changes
+
+            if (staffScaleValueSpan) {
                 staffScaleValueSpan.textContent = SCROLL_SPEED_PIXELS_PER_SECOND;
             }
             if (hitWindowValueSpan) {
@@ -2030,11 +2043,11 @@
 
         /** Recalculates derived timing variables when HIT_WINDOW_GOOD_MS changes */
         function updateTimingWindows() {
-            // ... (remains the same) ...
+            // Ensure perfect is always half of good
             HIT_WINDOW_PERFECT_MS = Math.floor(HIT_WINDOW_GOOD_MS / 2);
             HIT_WINDOW_GOOD_SEC = HIT_WINDOW_GOOD_MS / 1000.0;
             HIT_WINDOW_PERFECT_SEC = HIT_WINDOW_PERFECT_MS / 1000.0;
-            console.log(`Timing windows updated: Good=${HIT_WINDOW_GOOD_MS}ms, Perfect=${HIT_WINDOW_PERFECT_MS}ms`);
+            console.log(`Timing windows updated: Good=${HIT_WINDOW_GOOD_MS}ms (${HIT_WINDOW_GOOD_SEC.toFixed(3)}s), Perfect=${HIT_WINDOW_PERFECT_MS}ms (${HIT_WINDOW_PERFECT_SEC.toFixed(3)}s)`);
         }
 
 
@@ -2051,14 +2064,14 @@
             if (!audioModule) {
                  console.error("Audio module failed to load.");
                  loadingStatus.textContent = "Error: Audio module failed.";
-                 startButton.disabled = false; // Re-enable start? Or show error permanently?
+                 startButton.disabled = false;
                  return;
             }
             const audioInitialized = await audioModule.init(loadedAudioBuffer);
             if (!audioInitialized) {
                 console.error("Audio module initialization failed (decoding error).");
                 loadingStatus.textContent = "Error: Failed to decode audio.";
-                 startButton.disabled = false; // Allow retry?
+                 startButton.disabled = false;
                  return;
             }
             loadingStatus.textContent = "Initializing visuals...";
@@ -2069,7 +2082,6 @@
                  loadingStatus.textContent = "Error: Staff module failed.";
                  return;
             }
-            // Pass the already parsed JSON object
             const staffInitialized = staffModule.init(loadedNoteData);
              if (!staffInitialized) {
                 console.error("Staff module initialization failed (note processing error).");
@@ -2088,7 +2100,7 @@
 
             // 4. Set initial UI states
             updateInfoUI(); // Set initial health bar and combo
-            updateSettingsUI(); // Set initial settings display
+            updateSettingsUI(); // Set initial settings display (calls updateTimingWindows)
 
             // 5. Set initial layout based on current orientation/size
             handleLayoutChange(); // Call this AFTER game container is visible
@@ -2131,7 +2143,7 @@
                         gameIsRunning = false;
                         console.log("Paused game for settings.");
                     }
-                    updateSettingsUI();
+                    updateSettingsUI(); // Ensure UI reflects current state
                     settingsOverlay.classList.add('visible');
                 });
             }
@@ -2187,20 +2199,18 @@
 
              // Settings: Hit Window Adjustment
              const HIT_WINDOW_STEP = 5;
-             const HIT_WINDOW_MIN = 30;
-             const HIT_WINDOW_MAX = 150;
+             const HIT_WINDOW_MIN = 30; // Min Good window (Perfect will be 15)
+             const HIT_WINDOW_MAX = 200; // Increase max to allow 140 default
              if (hitWindowDownButton) {
                  hitWindowDownButton.addEventListener('click', () => {
                      HIT_WINDOW_GOOD_MS = Math.max(HIT_WINDOW_MIN, HIT_WINDOW_GOOD_MS - HIT_WINDOW_STEP);
-                     updateTimingWindows();
-                     updateSettingsUI();
+                     updateSettingsUI(); // Calls updateTimingWindows
                  });
              }
               if (hitWindowUpButton) {
                  hitWindowUpButton.addEventListener('click', () => {
                      HIT_WINDOW_GOOD_MS = Math.min(HIT_WINDOW_MAX, HIT_WINDOW_GOOD_MS + HIT_WINDOW_STEP);
-                     updateTimingWindows();
-                     updateSettingsUI();
+                     updateSettingsUI(); // Calls updateTimingWindows
                  });
              }
 
@@ -2377,6 +2387,8 @@
             });
 
             // Initial check in case files are pre-selected (e.g., browser refresh)
+            // Also call updateTimingWindows initially to set derived values from defaults
+            updateTimingWindows();
             checkFilesLoaded();
         });
         console.log("Global: window.onload event listener added for loading screen setup.");
