@@ -48,11 +48,46 @@
             background-color: #d0d0d0; /* Slightly lighter grey */
             padding: 5px 10px;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column; /* Stack top row and health bar */
+            justify-content: center; /* Center content vertically */
             flex-shrink: 0; /* Prevent shrinking */
             border-bottom: 1px solid #b0b0b0;
             overflow: hidden; /* Hide overflow */
+        }
+        #infoTopRow {
+            display: flex;
+            justify-content: space-between; /* Space out controls and combo */
+            align-items: center;
+            width: 100%;
+            margin-bottom: 5px; /* Space between top row and health bar */
+        }
+        #controlsContainer {
+             display: flex;
+             gap: clamp(4px, 1.5vmin, 8px); /* Responsive gap */
+             align-items: center; /* Align buttons and combo text */
+        }
+        #comboDisplay {
+            font-size: clamp(0.8em, 2.8vmin, 1.1em); /* Responsive font size */
+            font-weight: bold;
+            color: #333;
+            white-space: nowrap; /* Prevent wrapping */
+            margin-left: 10px; /* Space from buttons */
+        }
+        #healthBarContainer {
+            width: 100%;
+            height: clamp(10px, 3vmin, 15px); /* Responsive height */
+            background-color: #a0a0a0; /* Darker background for the bar */
+            border-radius: 5px;
+            border: 1px solid #888;
+            overflow: hidden; /* Keep the inner bar contained */
+            position: relative; /* For potential text overlay later */
+        }
+        #healthBar {
+            width: 66.66%; /* Start at 50/75 health */
+            height: 100%;
+            background-color: #4CAF50; /* Green health */
+            border-radius: 4px; /* Slightly smaller radius than container */
+            transition: width 0.3s ease-out, background-color 0.3s ease-out; /* Smooth transition for health changes */
         }
 
         #staffSection {
@@ -88,17 +123,17 @@
         /* Portrait Mode (Default - Mobile First) */
         #infoSection {
             order: 1;
-            height: 25%; /* Top 1/4 */
+            height: 15%; /* Top 15% */
             border-bottom: 1px solid #b0b0b0; /* Ensure border exists */
         }
         #staffSection {
             order: 2;
-            height: 50%; /* Middle 1/2 */
+            height: 50%; /* Middle 50% */
             border-bottom: 1px solid #b0b0b0; /* Ensure border exists */
         }
         #bottomPanel { /* Contains only keyboard in portrait */
             order: 3;
-            height: 25%; /* Bottom 1/4 */
+            height: 35%; /* Bottom 35% */
             border-top: none; /* Remove top border, staffSection has bottom border */
             flex-direction: column; /* Stack elements vertically (only keyboard here) */
         }
@@ -137,6 +172,7 @@
                 height: 100%; /* Full height of bottom panel */
                 border-bottom: none; /* No bottom border */
                 border-right: 1px solid #b0b0b0; /* Add border between info and keyboard */
+                justify-content: center; /* Center content vertically */
             }
 
             #keyboardSection {
@@ -229,15 +265,11 @@
         }
 
         /* Positioning for specific black keys - based on percentage of total piano width */
-        /* These percentages assume 7 white keys. Adjust if needed. */
-        /* 1/7th is approx 14.28% */
         .black[data-key="Db"] { left: 14.28%; }  /* Gap C-D */
         .black[data-key="Eb"] { left: 28.57%; } /* Gap D-E */
-        /* No black key between E-F */
         .black[data-key="Gb"] { left: 57.14%; } /* Gap F-G */
         .black[data-key="Ab"] { left: 71.42%; } /* Gap G-A */
         .black[data-key="Bb"] { left: 85.71%; } /* Gap A-B */
-        /* No black key between B-C */
 
         /* Style for pressed keys */
         .key.pressed {
@@ -249,29 +281,167 @@
             box-shadow: inset -1px 0 2px rgba(255,255,255,0.1), inset 0 -1px 2px rgba(0,0,0,0.3), inset 0 1px 2px rgba(0,0,0,0.5);
         }
 
-        /* --- Info Section Elements --- */
-        #infoDisplay {
-            /* Placeholder styling */
-            font-size: clamp(0.7em, 2.5vmin, 1em); /* Responsive font size */
-            color: #333;
-            white-space: nowrap; /* Prevent wrapping */
-        }
-        #controlsContainer {
-             display: flex;
-             gap: clamp(4px, 1.5vmin, 8px); /* Responsive gap */
-        }
+        /* --- Info Section Elements Styling --- */
         .control-button {
             /* Basic button styling */
-            padding: clamp(3px, 1vmin, 5px) clamp(6px, 2vmin, 10px); /* Responsive padding */
-            font-size: clamp(0.7em, 2vmin, 0.9em); /* Responsive font size */
+            padding: clamp(4px, 1.2vmin, 6px) clamp(8px, 2.2vmin, 12px); /* Responsive padding */
+            font-size: clamp(0.75em, 2.2vmin, 1em); /* Responsive font size */
             cursor: pointer;
             border-radius: 5px;
             border: 1px solid #888;
-            background-color: #e0e0e0;
+            background-color: #e8e8e8; /* Slightly lighter button */
             white-space: nowrap; /* Prevent wrapping */
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            line-height: 1; /* Ensure consistent height */
         }
         .control-button:hover {
-            background-color: #d0d0d0;
+            background-color: #d8d8d8;
+        }
+         .control-button:active {
+             box-shadow: inset 0 1px 2px rgba(0,0,0,0.15);
+             transform: translateY(1px);
+         }
+         /* Style for disabled buttons */
+        .control-button:disabled {
+            background-color: #cccccc;
+            color: #888888;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        /* --- Overlay Common Styles --- */
+        .overlay {
+            position: fixed; /* Cover the whole screen */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6); /* Semi-transparent black background */
+            display: none; /* Hidden by default */
+            justify-content: center;
+            align-items: center;
+            z-index: 1000; /* Ensure it's on top */
+            padding: 15px; /* Padding around the panel */
+        }
+        .overlay.visible {
+            display: flex; /* Show when visible class is added */
+        }
+        .overlay-panel {
+            background-color: #f0f0f0;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            min-width: 280px; /* Slightly wider for new controls */
+            max-width: 90%;
+            max-height: 90vh; /* Prevent panel from being too tall */
+            overflow-y: auto; /* Add scroll if content overflows */
+            display: flex;
+            flex-direction: column;
+            gap: 15px; /* Spacing between elements */
+        }
+        .overlay-panel h2 {
+            margin: 0 0 10px 0;
+            text-align: center;
+            color: #333;
+        }
+
+        /* --- Settings Overlay Specific Styles --- */
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px; /* Add gap between label and control */
+        }
+        .setting-item label {
+            /* margin-right: 15px; Replaced by gap */
+            color: #444;
+            white-space: nowrap; /* Prevent label wrapping */
+        }
+        .setting-control {
+            display: flex;
+            align-items: center;
+            gap: 5px; /* Gap between buttons and value */
+        }
+        .setting-value {
+            min-width: 40px; /* Ensure space for value */
+            text-align: right;
+            font-weight: bold;
+            color: #333;
+        }
+        .adjust-button {
+            font-weight: bold;
+            padding: 2px 6px; /* Smaller padding */
+            font-size: 0.9em;
+            min-width: 25px; /* Ensure buttons have some width */
+            line-height: 1;
+        }
+
+        /* Basic Toggle Switch Styling */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px; /* Width of the switch */
+            height: 24px; /* Height of the switch */
+            flex-shrink: 0; /* Prevent switch from shrinking */
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px; /* Make it rounded */
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px; /* Size of the knob */
+            width: 18px;
+            left: 3px; /* Padding from left */
+            bottom: 3px; /* Padding from bottom */
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%; /* Make it circular */
+        }
+        input:checked + .slider {
+            background-color: #4CAF50; /* Green when checked */
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px); /* Move knob to the right */
+        }
+        #closeSettingsButton {
+            align-self: center; /* Center the close button */
+            margin-top: 10px;
+        }
+
+        /* --- Score Overlay Specific Styles --- */
+        #scoreStats {
+            display: grid;
+            grid-template-columns: auto 1fr; /* Label and value columns */
+            gap: 5px 15px; /* Row gap, Column gap */
+            align-items: center;
+        }
+        #scoreStats dt { /* Definition Term (Label) */
+            font-weight: bold;
+            text-align: right;
+            color: #555;
+        }
+        #scoreStats dd { /* Definition Description (Value) */
+            margin: 0; /* Reset default margin */
+            text-align: left;
+        }
+        #restartButton {
+             align-self: center; /* Center the restart button */
+             margin-top: 15px;
         }
 
     </style>
@@ -280,13 +450,15 @@
 
     <div id="gameContainer">
         <div id="infoSection">
-            <div id="infoDisplay">
-                <span>Health: 50/75</span> | <span>Combo: 0</span>
+            <div id="infoTopRow">
+                <div id="controlsContainer">
+                     <button id="playPauseButton" class="control-button">Play</button>
+                     <button id="settingsButton" class="control-button">Settings</button>
+                     <div id="comboDisplay">Combo: <span id="comboCount">0</span></div>
+                </div>
             </div>
-            <div id="controlsContainer">
-                 <button id="playPauseButton" class="control-button">Play</button>
-                 <button id="colorToggleButton" class="control-button">Use Colors</button>
-                 <button id="pauseButton" class="control-button">Pause</button>
+             <div id="healthBarContainer">
+                <div id="healthBar"></div>
             </div>
         </div>
 
@@ -314,6 +486,62 @@
         </div>
     </div>
 
+    <div id="settingsOverlay" class="overlay">
+        <div id="settingsPanel" class="overlay-panel">
+            <h2>Settings</h2>
+            <div class="setting-item">
+                <label for="staffScaleValue">Staff Scale (px/s)</label>
+                <div class="setting-control">
+                    <button id="staffScaleDown" class="control-button adjust-button">-</button>
+                    <span id="staffScaleValue" class="setting-value">100</span>
+                    <button id="staffScaleUp" class="control-button adjust-button">+</button>
+                </div>
+            </div>
+             <div class="setting-item">
+                <label for="hitWindowValue">Hit Window (ms)</label>
+                 <div class="setting-control">
+                    <button id="hitWindowDown" class="control-button adjust-button">-</button>
+                    <span id="hitWindowValue" class="setting-value">70</span>
+                    <button id="hitWindowUp" class="control-button adjust-button">+</button>
+                </div>
+            </div>
+            <div class="setting-item">
+                <label for="colorToggleSwitch">Color Notes</label>
+                 <div class="setting-control">
+                     <label class="toggle-switch">
+                         <input type="checkbox" id="colorToggleSwitch">
+                         <span class="slider"></span>
+                     </label>
+                 </div>
+            </div>
+             <div class="setting-item">
+                <label for="noDeathToggleSwitch">No Death Mode</label>
+                 <div class="setting-control">
+                     <label class="toggle-switch">
+                         <input type="checkbox" id="noDeathToggleSwitch">
+                         <span class="slider"></span>
+                     </label>
+                 </div>
+            </div>
+            <button id="closeSettingsButton" class="control-button">Close</button>
+        </div>
+    </div>
+
+    <div id="scoreOverlay" class="overlay">
+        <div id="scorePanel" class="overlay-panel">
+            <h2>Results</h2>
+            <dl id="scoreStats">
+                <dt>Perfect:</dt> <dd><span id="scorePerfectCount">0</span> (<span id="scorePerfectPercent">0</span>%)</dd>
+                <dt>Good:</dt>    <dd><span id="scoreGoodCount">0</span> (<span id="scoreGoodPercent">0</span>%)</dd>
+                <dt>Miss:</dt>     <dd><span id="scoreMissCount">0</span> (<span id="scoreMissPercent">0</span>%)</dd>
+                <dt>Max Combo:</dt><dd><span id="scoreMaxCombo">0</span></dd>
+                <dt>Score:</dt>    <dd><span id="scoreTotalScore">0</span></dd>
+            </dl>
+            <button id="restartButton" class="control-button">Restart</button>
+        </div>
+    </div>
+
+
     <script>
         console.log("Keytap Game script starting execution.");
 
@@ -325,12 +553,240 @@
             } else { console.warn("Eruda not found."); }
         } catch (e) { console.error("Failed to initialize Eruda:", e); }
 
+        // --- Game Settings & State ---
+        const INITIAL_HEALTH = 50;
+        const MAX_HEALTH = 75;
+        const MIN_HEALTH = 0;
+        // Default values
+        let SCROLL_SPEED_PIXELS_PER_SECOND = 100;
+        let HIT_WINDOW_GOOD_MS = 70;
+        // Derived timing values (will be updated when HIT_WINDOW_GOOD_MS changes)
+        let HIT_WINDOW_PERFECT_MS = HIT_WINDOW_GOOD_MS / 2;
+        let HIT_WINDOW_GOOD_SEC = HIT_WINDOW_GOOD_MS / 1000.0;
+        let HIT_WINDOW_PERFECT_SEC = HIT_WINDOW_PERFECT_MS / 1000.0;
+        // Other state
+        let comboCount = 0;
+        let playerHealth = INITIAL_HEALTH;
+        let totalScore = 0; // Track cumulative score
+        let perfectCount = 0;
+        let goodCount = 0;
+        let missCount = 0;
+        let maxCombo = 0;
+        let totalNotesInSong = 0; // Will be set when notes are loaded
+        let useColoredNotes = false; // Initial state for color setting
+        let noDeathMode = false; // Initial state for no death mode
+        let gameIsRunning = false; // Global flag for overall game state (paused/playing)
+        let isGameOver = false; // Flag for game over state
+
         // --- Global DOM Elements ---
         const gameContainer = document.getElementById('gameContainer');
         const infoSection = document.getElementById('infoSection');
         const staffSection = document.getElementById('staffSection');
-        const bottomPanel = document.getElementById('bottomPanel'); // New container
+        const bottomPanel = document.getElementById('bottomPanel');
         const keyboardSection = document.getElementById('keyboardSection');
+        // Info Section Elements
+        const playPauseButton = document.getElementById('playPauseButton'); // Main Play/Pause
+        const settingsButton = document.getElementById('settingsButton');
+        const comboCountSpan = document.getElementById('comboCount');
+        const healthBarElement = document.getElementById('healthBar');
+        // Settings Overlay Elements
+        const settingsOverlay = document.getElementById('settingsOverlay');
+        const colorToggleSwitch = document.getElementById('colorToggleSwitch');
+        const noDeathToggleSwitch = document.getElementById('noDeathToggleSwitch');
+        const closeSettingsButton = document.getElementById('closeSettingsButton');
+        const staffScaleValueSpan = document.getElementById('staffScaleValue');
+        const staffScaleDownButton = document.getElementById('staffScaleDown');
+        const staffScaleUpButton = document.getElementById('staffScaleUp');
+        const hitWindowValueSpan = document.getElementById('hitWindowValue');
+        const hitWindowDownButton = document.getElementById('hitWindowDown');
+        const hitWindowUpButton = document.getElementById('hitWindowUp');
+        // Score Overlay Elements
+        const scoreOverlay = document.getElementById('scoreOverlay');
+        const scorePerfectCount = document.getElementById('scorePerfectCount');
+        const scorePerfectPercent = document.getElementById('scorePerfectPercent');
+        const scoreGoodCount = document.getElementById('scoreGoodCount');
+        const scoreGoodPercent = document.getElementById('scoreGoodPercent');
+        const scoreMissCount = document.getElementById('scoreMissCount');
+        const scoreMissPercent = document.getElementById('scoreMissPercent');
+        const scoreMaxCombo = document.getElementById('scoreMaxCombo');
+        const scoreTotalScore = document.getElementById('scoreTotalScore');
+        const restartButton = document.getElementById('restartButton');
+
+
+        // --- Scoring Constants ---
+        const ENERGY_PERFECT = 2;
+        const ENERGY_GOOD = 0; // No base energy for good hits
+        const ENERGY_MISS = -10;
+
+        /**
+         * Calculates the combo bonus energy based on the current combo count.
+         * @param {number} currentCombo - The current combo count.
+         * @returns {number} The additional energy awarded as a combo bonus.
+         */
+        function calculateComboBonus(currentCombo) {
+            if (currentCombo < 10) {
+                return 0;
+            }
+            // Calculate bonus tiers: 10-19 -> +1, 20-29 -> +2, etc.
+            const bonus = Math.floor((currentCombo - 1) / 10); // -1 ensures 10-19 is tier 1, 20-29 tier 2 etc.
+            return bonus;
+        }
+
+        /**
+         * Applies scoring changes based on hit type or miss.
+         * Updates playerHealth, comboCount, totalScore, maxCombo, and hit counts.
+         * @param {'perfect' | 'good' | 'miss'} hitType - The type of hit or miss.
+         */
+        function applyScore(hitType) {
+            if (isGameOver) return; // Don't apply score changes if game is already over
+
+            let baseEnergyChange = 0;
+            let comboBroken = false;
+
+            if (hitType === 'perfect') {
+                perfectCount++;
+                comboCount++;
+                baseEnergyChange = ENERGY_PERFECT;
+            } else if (hitType === 'good') {
+                goodCount++;
+                comboCount++;
+                baseEnergyChange = ENERGY_GOOD; // Still increments combo
+            } else if (hitType === 'miss') {
+                missCount++;
+                comboBroken = true;
+                baseEnergyChange = ENERGY_MISS;
+            }
+
+            // Update Max Combo
+            if (comboCount > maxCombo) {
+                maxCombo = comboCount;
+            }
+
+            // Calculate combo bonus only if the combo wasn't broken
+            const comboBonus = comboBroken ? 0 : calculateComboBonus(comboCount);
+            const totalEnergyChange = baseEnergyChange + comboBonus;
+
+            // Update Player Health (clamped)
+            const previousHealth = playerHealth;
+            playerHealth = Math.max(MIN_HEALTH, Math.min(MAX_HEALTH, playerHealth + totalEnergyChange));
+            const actualHealthChange = playerHealth - previousHealth; // How much health actually changed after clamping
+
+            // Update Total Score (Gain - Loss)
+            totalScore += totalEnergyChange; // Add the raw change (can be negative)
+
+            // Reset combo if broken
+            if (comboBroken) {
+                if (comboCount > 0) { // Only log if combo was actually broken
+                     console.log(`Combo Broken! Was: ${comboCount}`);
+                     comboCount = 0;
+                }
+            }
+
+            console.log(`Score Event: ${hitType.toUpperCase()} | Combo: ${comboCount} (Max: ${maxCombo}) | Health Change: ${actualHealthChange} (Raw: ${totalEnergyChange}) | Health: ${playerHealth}/${MAX_HEALTH} | Score: ${totalScore} | P:${perfectCount} G:${goodCount} M:${missCount}`);
+
+            // Update the UI
+            updateInfoUI();
+
+            // Check for Game Over AFTER updating UI
+            if (playerHealth <= MIN_HEALTH && !isGameOver) {
+                 // Check No Death Mode setting
+                 if (!noDeathMode) {
+                     triggerGameOver(false); // Pass false indicating it wasn't a song finish
+                 } else {
+                     console.log("Health reached zero, but No Death Mode is active.");
+                     // Keep playing, health stays at 0
+                 }
+            }
+        }
+
+        /**
+         * Handles the game over state or song completion.
+         * @param {boolean} songFinished - True if triggered by song end, false if by death.
+         */
+        function triggerGameOver(songFinished) {
+            if (isGameOver) return; // Prevent multiple triggers
+
+            console.log(songFinished ? "--- SONG FINISHED ---" : "--- GAME OVER ---");
+            isGameOver = true;
+            gameIsRunning = false; // Ensure game state is set to not running
+
+            // Pause the staff module if it exists and is running
+            if (staffModule && staffModule.isRunning()) {
+                staffModule.pause();
+            }
+            // Update button text and disable interactions
+            playPauseButton.textContent = songFinished ? "Finished" : "Game Over";
+            playPauseButton.disabled = true;
+            settingsButton.disabled = true;
+
+            // Show the score screen
+            showScoreScreen();
+        }
+
+        /** Calculates and displays the final score screen */
+        function showScoreScreen() {
+            if (!scoreOverlay) return;
+
+            const processedNotes = perfectCount + goodCount + missCount;
+            // Use totalNotesInSong if available and greater than 0, otherwise use processedNotes
+            const totalNotes = totalNotesInSong > 0 ? totalNotesInSong : processedNotes;
+
+            // Calculate percentages (handle division by zero)
+            const perfectPercent = totalNotes > 0 ? ((perfectCount / totalNotes) * 100).toFixed(1) : 0;
+            const goodPercent = totalNotes > 0 ? ((goodCount / totalNotes) * 100).toFixed(1) : 0;
+            const missPercent = totalNotes > 0 ? ((missCount / totalNotes) * 100).toFixed(1) : 0;
+
+            // Update DOM elements
+            scorePerfectCount.textContent = perfectCount;
+            scorePerfectPercent.textContent = perfectPercent;
+            scoreGoodCount.textContent = goodCount;
+            scoreGoodPercent.textContent = goodPercent;
+            scoreMissCount.textContent = missCount;
+            scoreMissPercent.textContent = missPercent;
+            scoreMaxCombo.textContent = maxCombo;
+            scoreTotalScore.textContent = totalScore;
+
+            // Make overlay visible
+            scoreOverlay.classList.add('visible');
+            console.log("Score screen displayed.");
+        }
+
+        /** Resets the game state to its initial values */
+        function restartGame() {
+            console.log("--- Restarting Game ---");
+
+            // Hide Score Overlay
+            if (scoreOverlay) {
+                scoreOverlay.classList.remove('visible');
+            }
+
+            // Reset Game State Variables
+            playerHealth = INITIAL_HEALTH;
+            comboCount = 0;
+            totalScore = 0;
+            perfectCount = 0;
+            goodCount = 0;
+            missCount = 0;
+            maxCombo = 0;
+            isGameOver = false;
+            gameIsRunning = false; // Start paused
+
+            // Reset Staff Module State (if possible)
+            if (staffModule) {
+                staffModule.resetNotes(); // Reset hit status for all notes
+                staffModule.resetTime();  // Reset displayTime to start
+                staffModule.pause();      // Ensure it's paused
+                staffModule.redraw();     // Redraw initial state
+            }
+
+            // Reset UI
+            updateInfoUI();
+            playPauseButton.textContent = "Play";
+            playPauseButton.disabled = false;
+            settingsButton.disabled = false;
+
+            console.log("Game state reset.");
+        }
 
 
         // --- Staff Component Logic ---
@@ -338,10 +794,12 @@
             console.log("Initializing Staff Module...");
 
             // --- Configuration Constants ---
-            const SCROLL_SPEED_PIXELS_PER_SECOND = 100;
+            // Note: SCROLL_SPEED_PIXELS_PER_SECOND and HIT_WINDOW variables are now global
             const PRE_DELAY_SECONDS = 1.0;
             const STAFF_LINE_COLOR = '#000000';
             const NOTE_COLOR = '#333333'; // Default note color (black notes mode)
+            const ACCIDENTAL_COLOR_BLACK_NOTES = '#888888'; // Gray for accidentals when notes are black
+            const ACCIDENTAL_COLOR_COLOR_NOTES = '#000000'; // Black for accidentals when notes are colored
             const STAFF_LINE_WIDTH = 1;
             const NOTE_CORNER_RADIUS = 3;
             const LINE_SPACING = 12; // Base spacing, affects height
@@ -351,21 +809,23 @@
             const JUDGMENT_LINE_X_PERCENT = 20; // Percentage from left
             const MIDI_NOTE_MIN = 36; // C2
             const MIDI_NOTE_MAX = 84; // C6
-            const ACCIDENTAL_OFFSET_X = -6; // Adjusted offset for better placement within note rect
+            const ACCIDENTAL_PADDING_X = 3; // Padding from note start
             const ACCIDENTAL_FONT_SIZE = LINE_SPACING * 1.2;
             const LEDGER_LINE_EXTENSION = 4;
             const LEDGER_LINE_WIDTH = 1;
             const MIN_DISPLAY_TIME = 0.0;
             const NOTE_DATA_URL = 'https://raw.githubusercontent.com/JotaGreen/keytap/refs/heads/main/test.json';
+            // Perfect Flash Effect
+            const PERFECT_FLASH_COLOR = 'rgba(255, 215, 0, 0.7)'; // Gold, semi-transparent
+            const PERFECT_FLASH_DURATION_MS = 150; // How long the flash lasts
+            const SONG_END_BUFFER_SEC = 2.0; // How long after the last note ends to trigger song finish
 
             // --- DOM Elements (Staff Specific) ---
             const canvas = document.getElementById('staffCanvas');
-            const playPauseButton = document.getElementById('playPauseButton');
-            const colorToggleButton = document.getElementById('colorToggleButton');
 
             // --- Canvas Setup ---
-            if (!canvas || !playPauseButton || !colorToggleButton || !staffSection) {
-                console.error("Staff Error: Required DOM element not found!");
+            if (!canvas || !staffSection) {
+                console.error("Staff Error: Required DOM element (canvas or staffSection) not found!");
                 return null; // Stop module initialization
             }
             const ctx = canvas.getContext('2d');
@@ -374,19 +834,20 @@
                 return null;
             }
             const devicePixelRatio = window.devicePixelRatio || 1;
-            console.log(`Staff: Device Pixel Ratio: ${devicePixelRatio}`);
+            // console.log(`Staff: Device Pixel Ratio: ${devicePixelRatio}`); // Reduce noise
 
             let canvasWidth = 300; // Logical display width (updated on resize)
             let canvasHeight = 150; // Logical display height (updated on resize)
             let judgmentLineX; // Logical X position (updated on resize)
 
             // --- Staff Geometry & Note Position Mapping ---
-            console.log("Staff: Calculating staff line Y positions and note mappings...");
+            // console.log("Staff: Calculating staff line Y positions and note mappings..."); // Reduce noise
             const HALF_LINE_SPACING = LINE_SPACING / 2;
             let totalStaffLogicalHeight = 150; // Calculated height
             const staffPositions = {}; // Holds absolute Y coords for staff lines/spaces
             let diatonicNoteYPositions = {}; // Holds absolute Y coords for note centers
             const midiToDiatonicDegree = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6]; // C=0, D=1, ..., B=6
+            const notePitchClasses = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]; // For matching key presses
 
             /** Calculates staff geometry, note Y positions, and total canvas height */
             function setupStaffAndNotes() {
@@ -450,7 +911,7 @@
                         maxY_rel = Math.max(maxY_rel, yPos_rel);
                     }
                 }
-                console.log("Staff: Relative diatonic note Y positions calculated.");
+                // console.log("Staff: Relative diatonic note Y positions calculated."); // Reduce noise
 
                 // Calculate total height needed based on highest/lowest note centers + note height + padding
                 const noteHeight = LINE_SPACING; // Note height matches line spacing
@@ -476,44 +937,46 @@
 
             // --- Note Data Storage ---
             let noteMap = null;
-            let notesToDraw = [];
+            let notesToDraw = []; // Will contain notes with { ..., y: number, hitStatus: null | 'good' | 'perfect' | 'miss' }
+            let songEndTime = 0; // Time when the last note finishes + buffer
 
             // --- State Variables ---
-            let isRunning = false;
+            let isStaffRunning = false; // Internal state for staff animation loop
             let animationFrameId = null;
-            let displayTime = PRE_DELAY_SECONDS;
-            let lastTimestamp = 0;
+            let displayTime = PRE_DELAY_SECONDS; // Current visual time offset from audio time
+            let lastTimestamp = 0; // For calculating delta time
             let isDragging = false;
             let dragStartX = 0;
             let dragStartTime = 0;
-            let useColoredNotes = false; // Start with black notes by default
+            let activeFlashes = []; // To store { y: number, endTime: number } for perfect hit flashes
 
             // --- Note Y Position Lookup Function ---
-            /**
-             * Gets the Y position for a note based on its base diatonic name (e.g., "C4", "F#5").
-             * @param {string} noteName The note name string (e.g., "C4", "F#5").
-             * @returns {number|null} The Y coordinate or null if lookup fails.
-             */
             function getNoteYPosition(noteName) {
-                // Match the base note letter (A-G) and octave number (\d)
-                // Allows for optional sharp (#) or flat (b)
                 const baseNameMatch = noteName.match(/([A-G])[#b]?(\d)/);
                 if (baseNameMatch) {
-                    // Construct the base name key used in the lookup table (e.g., "C4", "G5")
                     const baseName = baseNameMatch[1] + baseNameMatch[2];
                     const yPosition = diatonicNoteYPositions[baseName];
-                    if (yPosition !== undefined) {
-                        return yPosition;
-                    } else {
-                        // This note's base name isn't in our calculated map (e.g., out of range C2-C6)
-                        // console.warn(`Staff: Y Lookup Failure: Base name "${baseName}" (from "${noteName}") not in diatonicNoteYPositions map.`);
-                        return null; // Indicate lookup failure
-                    }
+                    return (yPosition !== undefined) ? yPosition : null;
                 } else {
-                    // The provided note name doesn't match the expected format
                     console.warn(`Staff: Could not parse base note name from: "${noteName}"`);
                     return null;
                 }
+            }
+
+            // --- Helper: Get Pitch Class from Note Name ---
+            function getPitchClass(noteName) {
+                const match = noteName.match(/([A-G][#b]?)/);
+                if (match) {
+                    let pc = match[1];
+                    // Simple normalization (can be improved with key signature later)
+                    if (pc === "C#") pc = "Db";
+                    if (pc === "D#") pc = "Eb";
+                    if (pc === "F#") pc = "Gb";
+                    if (pc === "G#") pc = "Ab";
+                    if (pc === "A#") pc = "Bb";
+                    return pc;
+                }
+                return null;
             }
 
 
@@ -574,35 +1037,42 @@
                 }
             }
 
-            function drawAccidental(note, x) {
+            /** Draws the accidental symbol (# or b) on top of the note start */
+            function drawAccidental(note, x) { // x is the starting x of the note rectangle
                 const accidental = note.name.includes('#') ? '♯' : note.name.includes('b') ? '♭' : null;
                 if (accidental && note.y !== null) {
-                    // Set color based on note color mode (always visible)
-                    ctx.fillStyle = '#000000'; // Black for accidentals regardless of note color
+                    // Set color based on useColoredNotes global variable
+                    ctx.fillStyle = useColoredNotes ? ACCIDENTAL_COLOR_COLOR_NOTES : ACCIDENTAL_COLOR_BLACK_NOTES;
                     ctx.font = `${ACCIDENTAL_FONT_SIZE}px sans-serif`;
-                    ctx.textAlign = 'right'; // Align right for negative offset
+                    ctx.textAlign = 'left';
                     ctx.textBaseline = 'middle';
-                    const accidentalX = x + ACCIDENTAL_OFFSET_X; // Place slightly before the note rectangle start
-                    const accidentalY = note.y;
+                    const accidentalX = x + ACCIDENTAL_PADDING_X;
+                    const accidentalY = note.y; // Center vertically on the note's Y
                     ctx.fillText(accidental, accidentalX, accidentalY);
                 }
             }
 
-            function drawNote(note, timeToDisplay) {
+
+            function drawNote(note, currentTime) {
+                // Don't draw if already hit successfully
+                if (note.hitStatus === 'good' || note.hitStatus === 'perfect') {
+                    return;
+                }
+                // Continue drawing if missed or not yet judged
                 if (note.y === null || note.y === undefined) { return; } // Skip notes with invalid Y positions
 
                 const noteY = note.y; // Center Y position
-                const timeUntilJudgment = note.time - timeToDisplay;
+                const timeUntilJudgment = note.time - currentTime; // Use current time from animation loop
+                // Use the global SCROLL_SPEED_PIXELS_PER_SECOND
                 const noteX = judgmentLineX + (timeUntilJudgment * SCROLL_SPEED_PIXELS_PER_SECOND);
                 const noteWidth = Math.max(1, note.duration * SCROLL_SPEED_PIXELS_PER_SECOND); // Ensure minimum width of 1px
                 const noteHeight = LINE_SPACING; // Note height matches line spacing
 
-                // Determine note color
+                // Determine note color (using global useColoredNotes)
                 let currentNoteColor = NOTE_COLOR; // Default black/grey
-                if (useColoredNotes) {
+                if (useColoredNotes) { // Check global variable
                     if (typeof getMidiNoteColor === 'function') {
                         try {
-                            // Assuming getMidiNoteColor is available from the external script
                             const rgbArray = getMidiNoteColor(note.midi);
                             if (rgbArray && rgbArray.length === 3) {
                                 currentNoteColor = `rgb(${rgbArray[0]}, ${rgbArray[1]}, ${rgbArray[2]})`;
@@ -612,11 +1082,13 @@
                 }
 
                 // Draw only if potentially visible (basic culling)
+                // Note: Missed notes will continue to be drawn until they scroll off
                 if (noteX < canvasWidth && (noteX + noteWidth) > 0) {
                     drawLedgerLines(note, noteX, noteWidth); // Draw ledger lines first (behind)
                     ctx.fillStyle = currentNoteColor; // Set the determined color
                     drawRoundedRect(noteX, noteY - noteHeight / 2, noteWidth, noteHeight, NOTE_CORNER_RADIUS); // Draw note body
-                    drawAccidental(note, noteX); // Draw accidental last (on top)
+                    // Draw accidental AFTER note body so it's on top
+                    drawAccidental(note, noteX);
                 }
             }
 
@@ -629,7 +1101,34 @@
                  ctx.stroke();
             }
 
-            function redrawCanvas(timeToDisplay) {
+            /** Draws active perfect hit flash effects */
+            function drawFlashes(currentTime) {
+                if (activeFlashes.length === 0) return;
+
+                ctx.fillStyle = PERFECT_FLASH_COLOR;
+                const flashHeight = LINE_SPACING * 1.5; // Make flash slightly taller than note
+                const flashWidth = 10; // Fixed width for the flash effect
+
+                // Iterate backwards for safe removal
+                for (let i = activeFlashes.length - 1; i >= 0; i--) {
+                    const flash = activeFlashes[i];
+                    if (currentTime >= flash.endTime) {
+                        activeFlashes.splice(i, 1); // Remove expired flash
+                    } else {
+                        // Draw the flash centered vertically on the note's Y
+                        drawRoundedRect(
+                            judgmentLineX - flashWidth / 2,
+                            flash.y - flashHeight / 2,
+                            flashWidth,
+                            flashHeight,
+                            flashWidth / 2 // Make it oval/circular
+                        );
+                    }
+                }
+            }
+
+
+            function redrawCanvas(currentTime) { // Renamed parameter for clarity
                 if (!ctx) return; // Don't draw if context is not available
                 ctx.save(); // Save default context state
                 // Clear the canvas (physical pixels)
@@ -644,17 +1143,19 @@
 
                 // Draw dynamic elements (notes)
                 if (notesToDraw.length > 0) {
-                    // Potential Optimization: Only draw notes within the visible time range
-                    notesToDraw.forEach(note => drawNote(note, timeToDisplay));
+                    // Pass the current displayTime to drawNote
+                    notesToDraw.forEach(note => drawNote(note, currentTime));
                 } else {
                     // Optionally draw a "Loading..." or "No notes" message
                     ctx.fillStyle = '#888';
                     ctx.font = '16px sans-serif';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle'; // Center text vertically
-                    // Draw in the middle of the logical canvas dimensions
                     ctx.fillText('Loading notes...', canvasWidth / 2, canvasHeight / 2);
                 }
+
+                // Draw perfect hit flashes on top
+                drawFlashes(currentTime);
                 // ---------------
 
                 ctx.restore(); // Restore context state
@@ -662,7 +1163,10 @@
 
             // --- Animation Loop ---
             function animationLoop(timestamp) {
-                if (!isRunning) { animationFrameId = null; return; } // Stop if paused
+                if (!isStaffRunning || isGameOver) { // Stop loop if paused or game over
+                     animationFrameId = null;
+                     return;
+                }
 
                 const currentTimeSeconds = timestamp / 1000.0;
                 // Calculate time elapsed since last frame, prevent large jumps on pause/resume
@@ -671,17 +1175,101 @@
 
                 lastTimestamp = currentTimeSeconds; // Store timestamp for next frame calculation
 
+                // --- Check for Missed Notes ---
+                // Use the global HIT_WINDOW_GOOD_SEC
+                const missThresholdTime = displayTime - HIT_WINDOW_GOOD_SEC;
+                notesToDraw.forEach(note => {
+                    // Check only notes that haven't been judged yet
+                    if (!note.hitStatus && note.time < missThresholdTime) {
+                        note.hitStatus = 'miss';
+                        // console.log(`Note Missed: ${note.name} (Time: ${note.time.toFixed(3)}, Display: ${displayTime.toFixed(3)})`); // Reduce noise
+                        // Apply scoring for miss
+                        applyScore('miss'); // Call the global scoring function
+                    }
+                });
+
+                // --- Check for Song End ---
+                if (songEndTime > 0 && displayTime >= songEndTime) {
+                    triggerGameOver(true); // Pass true indicating song finished
+                    // Loop will terminate because isGameOver is now true
+                }
+
                 redrawCanvas(displayTime); // Redraw everything for the new time
 
                 animationFrameId = requestAnimationFrame(animationLoop); // Request next frame
             }
 
-            // --- Control Functions ---
-            function playAnimation() {
-                if (!isRunning) {
-                    console.log("Staff: Playing animation...");
-                    isRunning = true;
-                    playPauseButton.textContent = "Pause";
+            // --- Judgment Logic ---
+            /**
+             * Judges a key press against notes near the judgment line.
+             * @param {string} keyName - The name of the key pressed (e.g., "C", "Db").
+             * @returns {string | null} - 'perfect', 'good', or null if no note was hit.
+             */
+            function judgeKeyPress(keyName) {
+                if (!isStaffRunning || isGameOver) return null; // Don't judge if paused or game over
+
+                const currentTime = displayTime; // Use the current visual time
+                let hitResult = null; // Track if we hit anything
+
+                // Find the *earliest* unhandled note of the correct pitch class within the "Good" window
+                let bestNote = null;
+                let minTimeDiff = Infinity;
+
+                for (const note of notesToDraw) {
+                    // Skip notes already handled or too far away in the past/future
+                    if (note.hitStatus) continue;
+
+                    const timeDiff = note.time - currentTime; // Positive if note is in future, negative if in past
+                    const absTimeDiff = Math.abs(timeDiff);
+
+                    // Check if within the wider "Good" window (use global variable)
+                    if (absTimeDiff <= HIT_WINDOW_GOOD_SEC) {
+                        // Check if the pitch class matches
+                        const notePitchClass = getPitchClass(note.name);
+                        if (notePitchClass === keyName) {
+                            // If this note is earlier *or closer to the judgment line* than the current best, select it
+                            // Prioritize notes closer to the judgment line (smaller absTimeDiff)
+                            if (absTimeDiff < minTimeDiff) {
+                                minTimeDiff = absTimeDiff;
+                                bestNote = note;
+                            }
+                        }
+                    }
+                }
+
+                // If we found a matching note in the window
+                if (bestNote) {
+                    // Determine Perfect or Good based on the absolute time difference (use global variable)
+                    if (minTimeDiff <= HIT_WINDOW_PERFECT_SEC) {
+                        bestNote.hitStatus = 'perfect';
+                        hitResult = 'perfect';
+                        // console.log(`PERFECT Hit: ${bestNote.name} (Diff: ${minTimeDiff.toFixed(3)}s)`); // Reduce noise
+                        // Trigger flash effect
+                        activeFlashes.push({ y: bestNote.y, endTime: currentTime + PERFECT_FLASH_DURATION_MS / 1000.0 });
+                        // Apply scoring for perfect
+                        applyScore('perfect'); // Call the global scoring function
+                    } else {
+                        bestNote.hitStatus = 'good';
+                        hitResult = 'good';
+                        // console.log(`GOOD Hit: ${bestNote.name} (Diff: ${minTimeDiff.toFixed(3)}s)`); // Reduce noise
+                         // Apply scoring for good
+                        applyScore('good'); // Call the global scoring function
+                    }
+                } else {
+                    // No matching note found in the window for this key press
+                    // console.log(`Key press ${keyName} - No matching note in window.`); // Reduce noise
+                    // TODO: Optionally apply a penalty for pressing a key when no note is there?
+                }
+
+                return hitResult; // Return 'perfect', 'good', or null
+            }
+
+
+            // --- Control Functions (Internal) ---
+            function playAnimationInternal() {
+                if (!isStaffRunning && !isGameOver) { // Don't play if game over
+                    console.log("Staff: Playing animation (Internal)...");
+                    isStaffRunning = true;
                     canvas.style.cursor = 'default'; // Normal cursor when playing
                     // Reset timestamp to avoid large jump after pause
                     lastTimestamp = performance.now() / 1000.0;
@@ -691,32 +1279,33 @@
                 }
             }
 
-            function pauseAnimation() {
-                if (isRunning) {
-                    console.log("Staff: Pausing animation...");
-                    isRunning = false; // Flag checked by animationLoop to stop
-                    // No need to cancelAnimationFrame explicitly, the loop checks isRunning
-                    playPauseButton.textContent = "Play";
+            function pauseAnimationInternal() {
+                if (isStaffRunning) {
+                    console.log("Staff: Pausing animation (Internal)...");
+                    isStaffRunning = false; // Flag checked by animationLoop to stop
                     canvas.style.cursor = 'grab'; // Grab cursor when paused/draggable
                     // Clear lastTimestamp to calculate fresh delta on resume
                     lastTimestamp = 0;
                 }
             }
 
-            function togglePlayPause() {
-                if (isRunning) { pauseAnimation(); } else { playAnimation(); }
+            /** Resets the hit status of all notes */
+            function resetNotesInternal() {
+                console.log("Staff: Resetting note hit statuses.");
+                notesToDraw.forEach(note => note.hitStatus = null);
+                activeFlashes = []; // Clear any active flashes
             }
 
-            function toggleNoteColors() {
-                useColoredNotes = !useColoredNotes; // Flip the state
-                colorToggleButton.textContent = useColoredNotes ? "Use Black" : "Use Colors"; // Update button text
-                console.log(`Staff: Note colors toggled. Using colored notes: ${useColoredNotes}`);
-                redrawCanvas(displayTime); // Redraw immediately with new colors
+            /** Resets the display time to the beginning */
+            function resetTimeInternal() {
+                 console.log("Staff: Resetting display time.");
+                 displayTime = PRE_DELAY_SECONDS;
+                 lastTimestamp = 0; // Reset last timestamp for delta calculation
             }
 
             // --- Event Handlers ---
             function handleResize() {
-                console.log("Staff: Handling resize...");
+                // console.log("Staff: Handling resize..."); // Reduce noise
                 // Get the available dimensions of the container element
                 const displayWidth = staffSection.offsetWidth;
                 const displayHeight = staffSection.offsetHeight;
@@ -729,31 +1318,29 @@
 
                 // Set logical canvas width to fill container
                 canvasWidth = displayWidth;
-                // *** FIX: Use the pre-calculated logical height, but cap it at the container's actual height ***
-                // This prevents the staff drawing from being smaller than the canvas when the container is tall,
-                // and ensures the drawing uses coordinates relative to its intended height.
+                // Use the pre-calculated logical height, but cap it at the container's actual height
                 canvasHeight = Math.min(displayHeight, totalStaffLogicalHeight);
 
                 // Adjust canvas buffer size for pixel density
                 canvas.width = Math.round(canvasWidth * devicePixelRatio);
                 canvas.height = Math.round(canvasHeight * devicePixelRatio);
 
-                // Set canvas display size using CSS (important!)
-                // The container (#staffSection) uses flexbox align-items: center to handle vertical positioning if displayHeight > canvasHeight
+                // Set canvas display size using CSS
                 canvas.style.width = `${canvasWidth}px`;
                 canvas.style.height = `${canvasHeight}px`;
 
                 // Recalculate judgment line logical X position based on new canvasWidth
                 judgmentLineX = canvasWidth * (JUDGMENT_LINE_X_PERCENT / 100);
 
-                console.log(`Staff: Canvas resized - Container: ${displayWidth}x${displayHeight}, Logical: ${canvasWidth.toFixed(0)}x${canvasHeight.toFixed(1)}px, Buffer: ${canvas.width}x${canvas.height}px`);
+                // console.log(`Staff: Canvas resized - Container: ${displayWidth}x${displayHeight}, Logical: ${canvasWidth.toFixed(0)}x${canvasHeight.toFixed(1)}px, Buffer: ${canvas.width}x${canvas.height}px`); // Reduce noise
                 redrawCanvas(displayTime); // Redraw immediately with new dimensions
             }
 
             function getEventX(event) { return event.touches ? event.touches[0].clientX : event.clientX; }
 
             function handleDragStart(event) {
-                if (!isRunning) { // Only allow dragging when paused
+                // Only allow dragging if the game is NOT running and NOT over
+                if (!isStaffRunning && !isGameOver) {
                     isDragging = true;
                     // Calculate starting X relative to the canvas element's bounding box
                     dragStartX = getEventX(event) - canvas.getBoundingClientRect().left;
@@ -767,11 +1354,12 @@
             }
 
             function handleDragMove(event) {
-                if (isDragging) {
+                if (isDragging) { // Dragging state implies game is paused and not over
                     const currentX = getEventX(event) - canvas.getBoundingClientRect().left;
                     const deltaX = currentX - dragStartX; // Pixel difference from start
 
                     // Convert pixel delta to time delta (negative because dragging right moves time backward)
+                    // Use the global SCROLL_SPEED_PIXELS_PER_SECOND
                     const deltaTimeOffset = deltaX / SCROLL_SPEED_PIXELS_PER_SECOND;
 
                     // Calculate new display time, clamping at the minimum allowed time
@@ -814,77 +1402,81 @@
                          const rawNotes = noteMap.tracks[0].notes;
                          console.log(`Staff: Found ${rawNotes.length} notes in the first track.`);
 
+                         totalNotesInSong = rawNotes.length; // Store total notes for percentage calculation
+                         let lastNoteEndTime = 0;
+
                          notesToDraw = rawNotes
                              .map(note => {
-                                 // *** FIX: Call getNoteYPosition with only note.name ***
                                  const yPos = getNoteYPosition(note.name);
-                                 // Log failures specifically
-                                 // if (yPos === null) {
-                                 //     console.warn(`Staff: Failed Y lookup for note: ${note.name} (MIDI: ${note.midi})`);
-                                 // }
+                                 const noteEndTime = note.time + note.duration;
+                                 if (noteEndTime > lastNoteEndTime) {
+                                     lastNoteEndTime = noteEndTime;
+                                 }
                                  return {
                                      ...note,
-                                     y: yPos // Store the result (null or number)
+                                     y: yPos,
+                                     hitStatus: null // Initialize hit status
                                  };
                              })
-                             .filter(note => note.y !== null); // Filter out notes where Y lookup failed (returned null)
+                             .filter(note => note.y !== null); // Filter out notes where Y lookup failed
 
-                         console.log(`Staff: Processed ${rawNotes.length} notes, ${notesToDraw.length} remain after Y position lookup and filtering.`);
+                         songEndTime = lastNoteEndTime + SONG_END_BUFFER_SEC; // Set song end time
+                         console.log(`Staff: Processed ${rawNotes.length} notes, ${notesToDraw.length} remain after Y position lookup and filtering. Calculated song end time: ${songEndTime.toFixed(3)}s`);
 
-                         // Sort notes by start time for efficient processing/drawing (optional but good practice)
+                         // Sort notes by start time for efficient processing/drawing
                          notesToDraw.sort((a, b) => a.time - b.time);
-                         console.log("Staff: Notes sorted by start time.");
+                         // console.log("Staff: Notes sorted by start time."); // Reduce noise
 
                       } else {
                           console.error("Staff Error: Fetched note data is missing tracks[0] or tracks[0].notes, or has an invalid format.");
                           notesToDraw = [];
+                          totalNotesInSong = 0;
+                          songEndTime = 0;
                       }
                  } catch (error) {
                      console.error("Staff: Fatal Error loading or processing note data:", error);
                      notesToDraw = []; // Ensure notesToDraw is empty on error
-                     // Optionally display an error message to the user on the canvas
+                     totalNotesInSong = 0;
+                     songEndTime = 0;
                  }
              }
 
             // Public init function for the module
             async function init() {
                 console.log("Staff Module: Initializing...");
-                // Verify getMidiNoteColor function exists (defined in external script)
-                if (typeof getMidiNoteColor === 'function') {
-                    console.log("Staff: getMidiNoteColor function found.");
-                } else {
-                    console.error("Staff CRITICAL: getMidiNoteColor function NOT FOUND. External script might have failed to load or define it.");
+                // Verify getMidiNoteColor function exists
+                if (typeof getMidiNoteColor !== 'function') {
+                    console.error("Staff CRITICAL: getMidiNoteColor function NOT FOUND.");
                 }
 
-                // Staff geometry calculation is done synchronously above
                 await loadNoteData(); // Load data from URL
-                handleResize(); // Set initial size based on container & calculated height
+                handleResize(); // Set initial size
                 displayTime = PRE_DELAY_SECONDS; // Set initial view time
                 redrawCanvas(displayTime); // Draw initial frame
 
-                // Add event listeners
-                playPauseButton.addEventListener('click', togglePlayPause);
-                colorToggleButton.addEventListener('click', toggleNoteColors);
-
-                // Dragging listeners (attach to canvas)
+                // Add event listeners (Dragging only)
                 canvas.addEventListener('mousedown', handleDragStart);
-                // Attach move/end listeners to window to catch events outside canvas bounds
                 window.addEventListener('mousemove', handleDragMove);
                 window.addEventListener('mouseup', handleDragEnd);
-
-                // Touch listeners (attach to canvas with passive: false to allow preventDefault)
                 canvas.addEventListener('touchstart', handleDragStart, { passive: false });
                 window.addEventListener('touchmove', handleDragMove, { passive: false });
                 window.addEventListener('touchend', handleDragEnd);
-                window.addEventListener('touchcancel', handleDragEnd); // Treat cancel like end
+                window.addEventListener('touchcancel', handleDragEnd);
 
                 console.log("Staff Module: Initialization complete.");
             }
 
-            // Expose necessary functions/variables if needed, otherwise just the init function
+            // --- Public Interface ---
             return {
                 init,
-                handleResize // Expose resize handler to be called globally
+                handleResize,
+                play: playAnimationInternal,
+                pause: pauseAnimationInternal,
+                redraw: () => redrawCanvas(displayTime), // Expose redraw for color changes
+                isRunning: () => isStaffRunning, // Expose running state
+                judgeKeyPress: judgeKeyPress, // Expose judgment function
+                resetNotes: resetNotesInternal, // Expose note reset function
+                resetTime: resetTimeInternal   // Expose time reset function
             };
 
         })(); // Immediately invoke the staff module function
@@ -904,20 +1496,31 @@
             // --- State Variables ---
             let isMouseDown = false; // Track mouse button state specifically for keyboard
             let activeTouches = {}; // Store currently active key per touch identifier: { touchId: keyElement }
+            let judgeFunction = null; // To hold the reference to staffModule.judgeKeyPress
 
             // --- Helper Functions ---
             function pressKey(keyElement) {
+                if (isGameOver) return; // Don't allow key presses after game over
                 if (keyElement && !keyElement.classList.contains('pressed')) {
                     keyElement.classList.add('pressed');
-                    console.log(`Keyboard: Pressed: ${keyElement.dataset.key}`);
-                    // TODO: Trigger game logic based on key press
+                    const keyName = keyElement.dataset.key;
+                    // console.log(`Keyboard: Pressed: ${keyName}`); // Reduce noise
+
+                    // Call the judgment function if it exists and game is running
+                    if (judgeFunction && gameIsRunning) { // Only judge if game is running
+                        judgeFunction(keyName);
+                    } else if (!gameIsRunning) {
+                         // console.log("Keyboard: Key pressed but game is paused."); // Reduce noise
+                    } else {
+                        console.warn("Keyboard: Judge function not available!");
+                    }
                 }
             }
 
             function releaseKey(keyElement) {
                 if (keyElement && keyElement.classList.contains('pressed')) {
                     keyElement.classList.remove('pressed');
-                    console.log(`Keyboard: Released: ${keyElement.dataset.key}`);
+                    // console.log(`Keyboard: Released: ${keyElement.dataset.key}`);
                 }
             }
 
@@ -930,7 +1533,7 @@
                 // Check if the click was on a valid key within this piano container
                 if (targetKey && pianoContainer.contains(targetKey)) {
                     isMouseDown = true; // Set the flag indicating the mouse button is down *for the keyboard*
-                    pressKey(targetKey); // Press the key visually
+                    pressKey(targetKey); // Press the key visually and trigger judgment
                     event.preventDefault(); // Prevent potential text selection or dragging page
                 }
             }
@@ -944,7 +1547,6 @@
                     // Release all keys visually within this piano
                     keys.forEach(releaseKey);
                     isMouseDown = false; // Reset the keyboard's mouse button state
-                    // No preventDefault needed here usually
                 }
             }
 
@@ -961,7 +1563,6 @@
             // --- Touch Handlers ---
             function handleTouchStart(event) {
                 // Prevent default actions ONLY if the touch starts directly on a key
-                // This allows scrolling/other interactions if touch starts elsewhere
                 const initialTargetKey = event.target.closest('.key');
                  if (initialTargetKey && pianoContainer.contains(initialTargetKey)) {
                      event.preventDefault(); // Prevent scroll/zoom ONLY when starting on a key
@@ -976,11 +1577,9 @@
                     // Ensure the touch started on a valid key within this piano
                     if (targetKey && pianoContainer.contains(targetKey)) {
                         const touchId = touch.identifier; // Get unique ID for this touch
-                        // Ensure this touch isn't already tracked (shouldn't happen with start, but safety)
                         if (!activeTouches[touchId]) {
                             activeTouches[touchId] = targetKey; // Store the key associated with this touch ID
-                            pressKey(targetKey); // Press the key visually
-                            console.log(`Keyboard Touch Start: ${touchId} on ${targetKey.dataset.key}`);
+                            pressKey(targetKey); // Press the key visually and trigger judgment
                         }
                     }
                 }
@@ -1023,18 +1622,14 @@
 
                             // If the touch is now over a new valid key, press it and update tracking
                             if (isValidKey) {
-                                pressKey(currentKey);
                                 activeTouches[touchId] = currentKey; // Update the active key for this touch
-                                console.log(`Keyboard Touch Move: ${touchId} moved to ${currentKey.dataset.key}`);
+                                pressKey(currentKey); // Press the NEW key visually and trigger judgment
                             } else {
                                 // Touch moved off the piano or onto a non-key element
                                 activeTouches[touchId] = null; // Mark this touch as not on a key anymore (but keep tracking ID until touchend)
-                                console.log(`Keyboard Touch Move: ${touchId} moved off keys`);
                             }
                         }
-                        // else: Touch is still on the same key, do nothing
                     }
-                     // else: This touch didn't start on a key, ignore its movement
                 }
             }
 
@@ -1063,29 +1658,22 @@
 
                     // Remove this touch from the tracking object
                     delete activeTouches[touchId];
-                    console.log(`Keyboard Touch End/Cancel: ${touchId}`);
                 }
             }
 
             // Public init function for the module
-            function init() {
+            function init(judgeKeyPressFunc) { // Accept the judge function as an argument
                 console.log("Keyboard Module: Initializing...");
+                judgeFunction = judgeKeyPressFunc; // Store the function reference
 
                 // --- Attach Event Listeners ---
-                // Mouse Events (attach to the specific piano container)
                 pianoContainer.addEventListener('mousedown', handleMouseDown);
-                // Listen globally for mouseup to catch releases outside the piano
                 document.addEventListener('mouseup', handleMouseUp);
                 pianoContainer.addEventListener('mouseleave', handleMouseLeave);
-
-                // Touch Events (attach to the specific piano container)
-                // Use passive: false to allow preventDefault() within handlers
                 pianoContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
                 pianoContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
                 pianoContainer.addEventListener('touchend', handleTouchEndOrCancel, { passive: false });
-                pianoContainer.addEventListener('touchcancel', handleTouchEndOrCancel, { passive: false }); // Treat cancel like end
-
-                // Prevent context menu on long press/right-click within the piano
+                pianoContainer.addEventListener('touchcancel', handleTouchEndOrCancel, { passive: false });
                 pianoContainer.addEventListener('contextmenu', (event) => event.preventDefault());
 
                 console.log("Keyboard Module: Initialization complete.");
@@ -1098,37 +1686,84 @@
 
         })(); // Immediately invoke the keyboard module function
 
+        // --- Global UI Update Functions ---
+        /** Updates the health bar and combo display */
+        function updateInfoUI() {
+            // Update Combo Count
+            if (comboCountSpan) {
+                comboCountSpan.textContent = comboCount;
+            }
+
+            // Update Health Bar
+            if (healthBarElement) {
+                const healthPercentage = Math.max(0, Math.min(100, (playerHealth / MAX_HEALTH) * 100));
+                healthBarElement.style.width = `${healthPercentage}%`;
+                // Optional: Change color based on health
+                if (healthPercentage <= 0) {
+                     healthBarElement.style.backgroundColor = '#555555'; // Dark grey when empty
+                } else if (healthPercentage < 25) {
+                    healthBarElement.style.backgroundColor = '#f44336'; // Red
+                } else if (healthPercentage < 50) {
+                    healthBarElement.style.backgroundColor = '#ff9800'; // Orange
+                } else {
+                    healthBarElement.style.backgroundColor = '#4CAF50'; // Green
+                }
+            }
+            // console.log(`UI Updated: Health=${playerHealth}/${MAX_HEALTH}, Combo=${comboCount}`); // Reduce console noise
+        }
+
+        /** Updates the displayed values in the settings panel */
+        function updateSettingsUI() {
+            if (staffScaleValueSpan) {
+                staffScaleValueSpan.textContent = SCROLL_SPEED_PIXELS_PER_SECOND;
+            }
+            if (hitWindowValueSpan) {
+                 hitWindowValueSpan.textContent = HIT_WINDOW_GOOD_MS;
+            }
+             if (colorToggleSwitch) {
+                colorToggleSwitch.checked = useColoredNotes;
+            }
+            if (noDeathToggleSwitch) {
+                noDeathToggleSwitch.checked = noDeathMode;
+            }
+            console.log("Settings UI updated.");
+        }
+
         // --- Global Initialization & Layout Management ---
 
         /** Handles layout adjustments needed on orientation change or resize */
         function handleLayoutChange() {
             const orientation = window.matchMedia("(orientation: landscape)").matches ? 'landscape' : 'portrait';
-            console.log(`Layout Check. Orientation: ${orientation}`);
+            // console.log(`Layout Check. Orientation: ${orientation}`); // Reduce noise
 
             // Move infoSection into bottomPanel for landscape, or back to gameContainer for portrait
             if (orientation === 'landscape') {
-                // Check if infoSection is NOT already a child of bottomPanel
                 if (infoSection.parentElement !== bottomPanel) {
                     bottomPanel.insertBefore(infoSection, keyboardSection); // Place info before keyboard
-                    console.log("Moved infoSection into bottomPanel for landscape.");
+                    // console.log("Moved infoSection into bottomPanel for landscape."); // Reduce noise
                 }
             } else { // Portrait
-                 // Check if infoSection IS currently a child of bottomPanel
                 if (infoSection.parentElement === bottomPanel) {
                     gameContainer.insertBefore(infoSection, staffSection); // Place info before staff
-                    console.log("Moved infoSection back to gameContainer for portrait.");
+                    // console.log("Moved infoSection back to gameContainer for portrait."); // Reduce noise
                 }
             }
 
             // Trigger resize for staff canvas after potential layout shifts
             if (staffModule && typeof staffModule.handleResize === 'function') {
-                 // Use setTimeout to allow DOM updates/reflows to settle before resizing canvas
                  setTimeout(staffModule.handleResize, 50); // Short delay
-                 console.log("Scheduled staff resize.");
+                 // console.log("Scheduled staff resize."); // Reduce noise
             } else {
                 console.warn("Could not trigger staff resize after layout change.");
             }
-             // Add resize handling for keyboard if necessary in the future
+        }
+
+        /** Recalculates derived timing variables when HIT_WINDOW_GOOD_MS changes */
+        function updateTimingWindows() {
+            HIT_WINDOW_PERFECT_MS = Math.floor(HIT_WINDOW_GOOD_MS / 2); // Ensure perfect is half
+            HIT_WINDOW_GOOD_SEC = HIT_WINDOW_GOOD_MS / 1000.0;
+            HIT_WINDOW_PERFECT_SEC = HIT_WINDOW_PERFECT_MS / 1000.0;
+            console.log(`Timing windows updated: Good=${HIT_WINDOW_GOOD_MS}ms, Perfect=${HIT_WINDOW_PERFECT_MS}ms`);
         }
 
 
@@ -1137,41 +1772,146 @@
             console.log("--- Initializing Keytap Game ---");
 
             // Initialize Modules
+            // Staff module needs to be initialized first as keyboard needs its judge function
             if (staffModule) await staffModule.init(); else console.error("Staff module failed to load.");
-            if (keyboardModule) keyboardModule.init(); else console.error("Keyboard module failed to load.");
+
+            // Pass the judgeKeyPress function from staff to keyboard during initialization
+            if (keyboardModule && staffModule && typeof staffModule.judgeKeyPress === 'function') {
+                 keyboardModule.init(staffModule.judgeKeyPress);
+            } else {
+                console.error("Keyboard module or staff judge function failed to load/initialize.");
+            }
+
+
+            // Set initial UI states
+            updateInfoUI(); // Set initial health bar and combo
+            updateSettingsUI(); // Set initial settings display
 
             // Set initial layout based on current orientation/size
             handleLayoutChange();
 
-            // Add listener for orientation changes
+            // --- Add Global Event Listeners ---
+
+            // Play/Pause Button
+            if (playPauseButton && staffModule) {
+                playPauseButton.addEventListener('click', () => {
+                    if (isGameOver) return; // Don't allow play/pause after game over
+
+                    if (gameIsRunning) {
+                        staffModule.pause();
+                        playPauseButton.textContent = "Play";
+                        gameIsRunning = false;
+                    } else {
+                        staffModule.play();
+                        playPauseButton.textContent = "Pause";
+                        gameIsRunning = true;
+                    }
+                    console.log(`Play/Pause toggled. Game running: ${gameIsRunning}`);
+                });
+            }
+
+            // Settings Button
+            if (settingsButton && settingsOverlay && staffModule) {
+                settingsButton.addEventListener('click', () => {
+                    if (isGameOver) return; // Don't allow settings after game over
+                    console.log("Settings button clicked.");
+                    // Pause the game first if it's running
+                    if (gameIsRunning) {
+                        staffModule.pause();
+                        playPauseButton.textContent = "Play"; // Update main button text
+                        gameIsRunning = false;
+                        console.log("Paused game for settings.");
+                    }
+                    // Ensure settings UI reflects current values before showing
+                    updateSettingsUI();
+                    // Show overlay
+                    settingsOverlay.classList.add('visible');
+                });
+            }
+
+            // Close Settings Button
+            if (closeSettingsButton && settingsOverlay) {
+                closeSettingsButton.addEventListener('click', () => {
+                    settingsOverlay.classList.remove('visible');
+                    console.log("Settings overlay closed.");
+                    // Leave paused. User must press Play again.
+                });
+            }
+
+             // Settings: Color Toggle Switch
+             if (colorToggleSwitch && staffModule) {
+                 colorToggleSwitch.addEventListener('change', (event) => {
+                     useColoredNotes = event.target.checked;
+                     console.log(`Color notes setting changed: ${useColoredNotes}`);
+                     // Immediately redraw the staff with the new setting
+                     staffModule.redraw();
+                 });
+             }
+
+             // Settings: No Death Mode Toggle Switch
+             if (noDeathToggleSwitch) {
+                 noDeathToggleSwitch.addEventListener('change', (event) => {
+                     noDeathMode = event.target.checked;
+                     console.log(`No Death Mode setting changed: ${noDeathMode}`);
+                 });
+             }
+
+             // Settings: Staff Scale Adjustment
+             const STAFF_SCALE_STEP = 10;
+             const STAFF_SCALE_MIN = 50;
+             const STAFF_SCALE_MAX = 200;
+             if (staffScaleDownButton) {
+                 staffScaleDownButton.addEventListener('click', () => {
+                     SCROLL_SPEED_PIXELS_PER_SECOND = Math.max(STAFF_SCALE_MIN, SCROLL_SPEED_PIXELS_PER_SECOND - STAFF_SCALE_STEP);
+                     updateSettingsUI();
+                     staffModule.redraw(); // Redraw needed to see effect if paused
+                 });
+             }
+             if (staffScaleUpButton) {
+                 staffScaleUpButton.addEventListener('click', () => {
+                     SCROLL_SPEED_PIXELS_PER_SECOND = Math.min(STAFF_SCALE_MAX, SCROLL_SPEED_PIXELS_PER_SECOND + STAFF_SCALE_STEP);
+                     updateSettingsUI();
+                     staffModule.redraw(); // Redraw needed to see effect if paused
+                 });
+             }
+
+             // Settings: Hit Window Adjustment
+             const HIT_WINDOW_STEP = 5;
+             const HIT_WINDOW_MIN = 30; // Min Good window (Perfect will be 15)
+             const HIT_WINDOW_MAX = 150; // Max Good window (Perfect will be 75)
+             if (hitWindowDownButton) {
+                 hitWindowDownButton.addEventListener('click', () => {
+                     HIT_WINDOW_GOOD_MS = Math.max(HIT_WINDOW_MIN, HIT_WINDOW_GOOD_MS - HIT_WINDOW_STEP);
+                     updateTimingWindows(); // Recalculate dependent variables
+                     updateSettingsUI();
+                 });
+             }
+              if (hitWindowUpButton) {
+                 hitWindowUpButton.addEventListener('click', () => {
+                     HIT_WINDOW_GOOD_MS = Math.min(HIT_WINDOW_MAX, HIT_WINDOW_GOOD_MS + HIT_WINDOW_STEP);
+                     updateTimingWindows(); // Recalculate dependent variables
+                     updateSettingsUI();
+                 });
+             }
+
+
+             // Score Screen: Restart Button
+             if (restartButton) {
+                 restartButton.addEventListener('click', restartGame);
+             }
+
+            // Orientation Change Listener
             window.matchMedia("(orientation: landscape)").addEventListener("change", handleLayoutChange);
 
-            // Add listener for window resize (might affect canvas size even without orientation change)
-            // Debounce resize events for performance
+            // Window Resize Listener (Debounced)
             let resizeTimeout;
             window.addEventListener('resize', () => {
                 clearTimeout(resizeTimeout);
                 resizeTimeout = setTimeout(() => {
-                    console.log("Window resize detected, running layout check.");
-                    // Re-apply layout logic and resize canvas
+                    // console.log("Window resize detected, running layout check."); // Reduce noise
                     handleLayoutChange();
                 }, 150); // Wait 150ms after last resize event
             });
-
-
-            // Placeholder for Pause Button functionality
-            const pauseButton = document.getElementById('pauseButton');
-            if (pauseButton) {
-                pauseButton.addEventListener('click', () => {
-                    console.log("Pause button clicked (placeholder)");
-                    // TODO: Implement actual pause logic
-                    // Example: Toggle staff play/pause
-                    if (staffModule) {
-                        const staffPlayPauseButton = document.getElementById('playPauseButton');
-                        if (staffPlayPauseButton) staffPlayPauseButton.click(); // Simulate click on staff's button
-                    }
-                });
-            }
 
             console.log("--- Keytap Game Initialization Complete ---");
         }
