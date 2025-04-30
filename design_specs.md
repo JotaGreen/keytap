@@ -175,7 +175,6 @@ A web-based rhythm game that combines Guitar Hero-style gameplay with piano shee
 - Use Web Audio API's context.currentTime as source of truth for sync
 - Implement pre-loading and buffering of audio files
 - To convert the colors from okhsl to rgb, use as reference the code in https://github.com/bottosson/bottosson.github.io/blob/master/misc/colorpicker/colorconversion.js. It is MIT licensed.
-- Apply a small (~100ms) default pre-delay before starting visual scrolling
 - Calculate note positions dynamically based on audio playback position
 - For chords, handle each note independently for hit judgment (they don’t need to be pressed at the same time)
 - Support multi-touch input for the virtual keyboard
