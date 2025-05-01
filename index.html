@@ -136,9 +136,7 @@
         const MIN_HEALTH = 0;
         const PRE_DELAY_SECONDS = 1.0; // Delay before audio *starts* after visuals begin scrolling
         // Default values (can be changed in settings)
-        // CHANGE: Update default staff scale
         let SCROLL_SPEED_PIXELS_PER_SECOND = 120;
-        // CHANGE: Update default hit window
         let HIT_WINDOW_GOOD_MS = 140;
         // Derived timing values (updated when HIT_WINDOW_GOOD_MS changes)
         let HIT_WINDOW_PERFECT_MS = HIT_WINDOW_GOOD_MS / 2;
@@ -213,7 +211,6 @@
         // --- Scoring Constants ---
         const ENERGY_PERFECT = 2;
         const ENERGY_GOOD = 0; // No base energy for good hits
-        // CHANGE: Update miss penalty
         const ENERGY_MISS = -5;
 
         /**
@@ -396,7 +393,6 @@
 
         // --- Audio Module (Web Audio API) ---
         const audioModule = (() => {
-            // ... (Audio module remains the same as previous version) ...
             console.log("Initializing Audio Module...");
             let audioContext = null;
             let audioBuffer = null; // Decoded audio data
