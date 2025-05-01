@@ -8,7 +8,7 @@ A web-based rhythm game that combines Guitar Hero-style gameplay with piano shee
 - Don’t use React or other libraries that require a build process.
 - Use Web Audio API for precise audio timing and playback
 - Use Canvas for rendering the staff, notes, and animations
-- Add the Eruda library to facilitate debugging.. 
+- Add the Eruda library to facilitate debugging.
 - Client-side only implementation (no server required)
 - Files should be completely loaded/buffered before gameplay begins to avoid delays or synchronization issues
 - Use audioContext.currentTime as the source of truth for timing animations
@@ -64,7 +64,7 @@ A web-based rhythm game that combines Guitar Hero-style gameplay with piano shee
 ### Scoring System
 - Energy Meter starts at 50 (range 0-75)
 - Perfect hits: +2 Energy
-- Missed notes: -10 Energy
+- Missed notes: -5 Energy
 - Combo bonus (consecutive non-miss notes):
   - 1-9: No bonus
   - 10-19: +1 extra Energy
