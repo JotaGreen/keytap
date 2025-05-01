@@ -7,8 +7,8 @@
  * interpolated across a defined MIDI range (default: 24-108) and lightness
  * range (default: 0.275-0.80). Saturation is kept constant (default: 1.0).
  *
- * Includes robust OKHSL to sRGB conversion functions adapted from
- * Björn Ottosson's work (https://bottosson.github.io/posts/oklab/).
+ * Code mostly copied from Björn Ottosson
+ * https://github.com/bottosson/bottosson.github.io/blob/master/misc/colorpicker/colorconversion.js
  */
 
 // --- Configuration Constants ---
