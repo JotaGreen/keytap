@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Keytap - Game</title>
     <script src="//cdn.jsdelivr.net/npm/eruda"></script>
-    <script src="https://cdn.jsdelivr.net/gh/JotaGreen/keytap@main/midiColorConverter.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/JotaGreen/keytap@main/audioModule.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/JotaGreen/keytap@main/style.css">
 </head>
 <body>
@@ -118,6 +116,9 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/gh/JotaGreen/keytap@main/midiColorConverter.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/JotaGreen/keytap@main/audioModule.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/JotaGreen/keytap@main/keyboardModule.js"></script>
 
     <script>
         console.log("Keytap Game script starting execution.");
@@ -1082,180 +1083,6 @@
 
         })(); // Immediately invoke the staff module function
 
-        // --- Keyboard Component Logic ---
-        const keyboardModule = (() => {
-            // ... (Keyboard module remains the same as previous version) ...
-            console.log("Initializing Keyboard Module...");
-
-            // --- DOM Elements (Keyboard Specific) ---
-            const pianoContainer = document.getElementById('piano');
-            if (!pianoContainer) {
-                console.error("Keyboard Error: Piano container element not found!");
-                return null; // Stop module initialization
-            }
-            const keys = pianoContainer.querySelectorAll('.key'); // Get all key elements within the piano
-
-            // --- State Variables ---
-            let isMouseDown = false; // Track mouse button state specifically for keyboard
-            let activeTouches = {}; // Store currently active key per touch identifier: { touchId: keyElement }
-            let judgeFunction = null; // To hold the reference to staffModule.judgeKeyPress
-
-            // --- Helper Functions ---
-            function pressKey(keyElement) {
-                if (isGameOver) return; // Don't allow key presses after game over
-                if (keyElement && !keyElement.classList.contains('pressed')) {
-                    keyElement.classList.add('pressed');
-                    const keyName = keyElement.dataset.key;
-
-                    // Call the judgment function if it exists and game is running
-                    if (judgeFunction && gameIsRunning) { // Only judge if game is running visually/audibly
-                        // Before judging, ensure AudioContext is running (required for touch interactions)
-                        if (audioModule) {
-                             audioModule.resumeContext().then(() => {
-                                 // Context is running, now judge
-                                 judgeFunction(keyName);
-                             });
-                        } else {
-                            console.warn("Keyboard: Audio module not available for context check.");
-                            judgeFunction(keyName); // Attempt judgment anyway
-                        }
-                    } else if (!gameIsRunning) {
-                         // Key pressed while paused - potentially provide visual feedback only?
-                         // console.log("Keyboard: Key pressed but game is paused.");
-                    } else {
-                        console.warn("Keyboard: Judge function not available!");
-                    }
-                }
-            }
-
-            function releaseKey(keyElement) {
-                if (keyElement && keyElement.classList.contains('pressed')) {
-                    keyElement.classList.remove('pressed');
-                }
-            }
-
-            // --- Event Handlers ---
-            // Mouse handlers remain largely the same...
-            function handleMouseDown(event) {
-                if (event.button !== 0) return;
-                const targetKey = event.target.closest('.key');
-                if (targetKey && pianoContainer.contains(targetKey)) {
-                    isMouseDown = true;
-                    pressKey(targetKey);
-                    event.preventDefault();
-                }
-            }
-            function handleMouseUp(event) {
-                if (event.button !== 0) return;
-                if (isMouseDown) {
-                    keys.forEach(releaseKey);
-                    isMouseDown = false;
-                }
-            }
-            function handleMouseLeave(event) {
-                if (isMouseDown && event.target === pianoContainer) {
-                    keys.forEach(releaseKey);
-                    isMouseDown = false;
-                }
-            }
-
-            // Touch handlers remain largely the same...
-             function handleTouchStart(event) {
-                const initialTargetKey = event.target.closest('.key');
-                 if (initialTargetKey && pianoContainer.contains(initialTargetKey)) {
-                     event.preventDefault();
-                 }
-                for (let i = 0; i < event.changedTouches.length; i++) {
-                    const touch = event.changedTouches[i];
-                    const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
-                    const targetKey = elementUnderTouch ? elementUnderTouch.closest('.key') : null;
-                    if (targetKey && pianoContainer.contains(targetKey)) {
-                        const touchId = touch.identifier;
-                        if (!activeTouches[touchId]) {
-                            activeTouches[touchId] = targetKey;
-                            pressKey(targetKey); // This now handles the audio context resume check
-                        }
-                    }
-                }
-            }
-            function handleTouchMove(event) {
-                 let shouldPreventDefault = false;
-                 for (let i = 0; i < event.changedTouches.length; i++) {
-                     const touch = event.changedTouches[i];
-                     if (activeTouches[touch.identifier]) {
-                         shouldPreventDefault = true;
-                         break;
-                     }
-                 }
-                 if (shouldPreventDefault) {
-                     event.preventDefault();
-                 }
-                for (let i = 0; i < event.changedTouches.length; i++) {
-                    const touch = event.changedTouches[i];
-                    const touchId = touch.identifier;
-                    const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
-                    const currentKey = elementUnderTouch ? elementUnderTouch.closest('.key') : null;
-                    const isValidKey = currentKey && pianoContainer.contains(currentKey);
-                    const previousKey = activeTouches[touchId];
-
-                    if (previousKey !== undefined) {
-                        if (currentKey !== previousKey) {
-                            releaseKey(previousKey);
-                            if (isValidKey) {
-                                activeTouches[touchId] = currentKey;
-                                pressKey(currentKey); // Handles audio context check
-                            } else {
-                                activeTouches[touchId] = null;
-                            }
-                        }
-                    }
-                }
-            }
-            function handleTouchEndOrCancel(event) {
-                let shouldPreventDefault = false;
-                for (let i = 0; i < event.changedTouches.length; i++) {
-                    const touch = event.changedTouches[i];
-                    if (activeTouches[touch.identifier]) {
-                        shouldPreventDefault = true;
-                        break;
-                    }
-                }
-                if (shouldPreventDefault) {
-                    event.preventDefault();
-                }
-                for (let i = 0; i < event.changedTouches.length; i++) {
-                    const touch = event.changedTouches[i];
-                    const touchId = touch.identifier;
-                    const lastKey = activeTouches[touchId];
-                    releaseKey(lastKey);
-                    delete activeTouches[touchId];
-                }
-            }
-
-            // Public init function for the module
-            function init(judgeKeyPressFunc) { // Accept the judge function as an argument
-                console.log("Keyboard Module: Initializing...");
-                judgeFunction = judgeKeyPressFunc; // Store the function reference
-
-                // --- Attach Event Listeners ---
-                pianoContainer.addEventListener('mousedown', handleMouseDown);
-                document.addEventListener('mouseup', handleMouseUp); // Listen on document for mouseup outside piano
-                pianoContainer.addEventListener('mouseleave', handleMouseLeave);
-                pianoContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
-                pianoContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
-                pianoContainer.addEventListener('touchend', handleTouchEndOrCancel, { passive: false });
-                pianoContainer.addEventListener('touchcancel', handleTouchEndOrCancel, { passive: false });
-                pianoContainer.addEventListener('contextmenu', (event) => event.preventDefault());
-
-                console.log("Keyboard Module: Initialization complete.");
-            }
-
-            // Expose necessary functions/variables if needed
-            return {
-                init
-            };
-        })(); // Immediately invoke the keyboard module function
-
         // --- Global UI Update Functions ---
         /** Updates the health bar and combo display */
         function updateInfoUI() {
@@ -1673,6 +1500,5 @@
         console.log("Global: window.onload event listener added for loading screen setup.");
 
     </script>
-
 </body>
 </html>
