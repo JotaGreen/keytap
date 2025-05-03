@@ -507,7 +507,7 @@ function okhsl_to_srgb(h, s, l) {
  * @returns {number[]} An array [r, g, b] representing the sRGB color (0-255).
  * Returns black ([0, 0, 0]) if the input is invalid.
  */
-function getMidiNoteColor(midiNote) {
+export function getMidiNoteColor(midiNote) {
     // Basic input validation
     if (typeof midiNote !== 'number' || !Number.isInteger(midiNote)) {
         console.error("Invalid input: midiNote must be an integer.", midiNote);
@@ -534,11 +534,7 @@ function getMidiNoteColor(midiNote) {
     return [r, g, b];
 }
 
-// --- Optional: Export for module usage ---
-// If you intend to use this file as an ES module, uncomment the following line:
-// export { getMidiNoteColor };
-
-// Example Usage (can be commented out or removed in final file):
+// Example Usage
 /*
 console.log("C4 (MIDI 60):", getMidiNoteColor(60)); // Example: Middle C
 console.log("A4 (MIDI 69):", getMidiNoteColor(69)); // Example: A440
