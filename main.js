@@ -226,19 +226,6 @@ function keyboard_init(config) {
 // --- End of Keyboard Module section ---
 
 
-// --- Initialize Eruda (Optional Debugging Tool) ---
-try {
-    // Access eruda globally if loaded via standard <script> tag in HTML
-    if (typeof eruda !== 'undefined') {
-        eruda.init();
-        console.log("Eruda initialized.");
-    } else {
-        console.warn("Eruda not found.");
-    }
-} catch (e) {
-    console.error("Failed to initialize Eruda:", e);
-}
-
 
 // --- Global Variables & State (Module-Scoped within main.js) ---
 // Game Settings & Constants
