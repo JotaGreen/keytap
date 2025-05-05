@@ -1,6 +1,6 @@
-// --- Audio Module (ES Module Format) ---
+// --- Audio Module ---
 
-console.log("Initializing Audio Module...");
+console.log("Loading Audio Module...");
 
 // --- Module-Scoped Variables (Private State) ---
 let audioContext = null;
@@ -21,6 +21,7 @@ let onSongEndCallback = null; // Callback function for when the song ends natura
  * @export
  */
 export async function init(audioDataArrayBuffer, onSongEnd) {
+    console.log("Initializing Audio Module...");
     // Store the callback
     onSongEndCallback = typeof onSongEnd === 'function' ? onSongEnd : null;
 
