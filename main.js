@@ -5,6 +5,9 @@
  * Designed to be loaded as an ES Module (<script type="module">).
  */
 
+console.log("--- main.js started execution ---");
+
+
 // --- Module Imports ---
 
 // Import all exported functions from audio.js (replace URL with your actual CDN link)
