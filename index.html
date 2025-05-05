@@ -115,7 +115,17 @@
             <button id="restartButton" class="control-button">Restart</button>
         </div>
     </div>
-
+    <script>
+         console.log("Keytap Game script starting execution.");
+ 
+         // --- Initialize Eruda ---
+         try {
+             if (typeof eruda !== 'undefined') {
+                 eruda.init();
+                 console.log("Eruda initialized.");
+             } else { console.warn("Eruda not found."); }
+         } catch (e) { console.error("Failed to initialize Eruda:", e); }
+    </script>
     <script type="module src="main.js"></script>
 </body>
 </html>
