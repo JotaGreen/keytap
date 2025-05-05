@@ -1,11 +1,11 @@
+console.log("--- main.js started execution ---");
+
 /**
  * @file main.js
  * Main entry point and orchestrator for the Keytap game.
  * Loads modules, initializes the game, handles global state and UI updates.
  * Designed to be loaded as an ES Module (<script type="module">).
  */
-
-console.log("--- main.js started execution ---");
 
 
 // --- Module Imports ---
