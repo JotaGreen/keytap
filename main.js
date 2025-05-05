@@ -11,11 +11,11 @@ console.log("--- main.js started execution ---");
 // --- Module Imports ---
 
 // Import all exported functions from audio.js (replace URL with your actual CDN link)
-import * as audio from 'audioModule.js';
+import * as audio from './audioModule.js';
 // Import the color conversion function (assuming midiColorConverter.js is also an ES module exporting this)
 // If midiColorConverter.js is NOT an ES module, load it via a separate standard <script> tag in HTML
 // and access getMidiNoteColor globally (less ideal). Let's assume it IS an ES module for now.
-import { getMidiNoteColor } from 'https://cdn.jsdelivr.net/gh/JotaGreen/keytap@main/midiColorConverter.js';
+import { getMidiNoteColor } from './midiColorConverter.js';
 
 
 // --- Keyboard Module (Included here temporarily, formatted as ES Module) ---
