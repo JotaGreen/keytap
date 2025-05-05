@@ -229,11 +229,15 @@ function keyboard_init(config) {
 
 // --- Global Variables & State (Module-Scoped within main.js) ---
 // Game Settings & Constants
-// Export constants if they need to be imported by other modules (like audio.js)
-export const INITIAL_HEALTH = 50;
-export const MAX_HEALTH = 75;
-export const MIN_HEALTH = 0;
-export const PRE_DELAY_SECONDS = 1.0; // Delay before audio starts
+const INITIAL_HEALTH = 50;
+const MAX_HEALTH = 75;
+const MIN_HEALTH = 0;
+const PRE_DELAY_SECONDS = 1.0; // Delay before audio starts
+
+// --- Scoring Constants ---
+const ENERGY_PERFECT = 2;
+const ENERGY_GOOD = 0;
+const ENERGY_MISS = -5;
 
 // Default values (can be changed in settings)
 let SCROLL_SPEED_PIXELS_PER_SECOND = 120;
