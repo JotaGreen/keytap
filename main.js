@@ -915,8 +915,4 @@ window.addEventListener('load', () => {
     console.log("Main: Main script setup complete. Waiting for file selection.");
 });
 
-// Export getter functions for game state if other modules need read-only access
-// Currently, keyboardModule gets these via function references passed during its init.
-// export function getIsGameOver() { return isGameOver; }
-// export function getIsGameRunning() { return gameIsRunning; }
 console.log("--- main.js finished synchronous execution ---");
