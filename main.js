@@ -658,25 +658,8 @@ function setupGlobalEventListeners() {
 
      // Score Screen: Restart Button
      if (restartButton) {
-         restartButton.addEventListener('click', () => {
-            console.log("Main: Restart button (on score screen) clicked.");
-            // A common way to "restart" a single-page app like this is to reload the page.
-            // This ensures all state is truly reset.
-            // Alternatively, implement a more complex state reset and transition back to loadingScreen.
-            // For now, let's use location.reload() for simplicity.
-            // restartGame(); // This resets state but doesn't go back to loading screen.
-            // To go back to loading screen:
-            // 1. Call restartGame()
-            // 2. Hide gameContainer, show loadingScreen
-            // 3. Reset file inputs, etc.
-            // For now, a reload is cleaner.
-            console.log("Main: Reloading the page to restart.");
-            window.location.reload();
-         });
-         console.log("Main (setupGlobalEventListeners): Restart button listener attached.");
-     } else {
-         console.warn("Main (setupGlobalEventListeners): Restart button not found. Listener not attached.");
-     }
+         restartButton.addEventListener('click', restartGame);
+     } else { console.warn("Restart button not found."); }
 
     // Orientation Change Listener
     // Using modern addEventListener for matchMedia
