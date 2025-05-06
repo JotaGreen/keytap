@@ -10,8 +10,6 @@
 console.log("Staff Module: Script loading...");
 
 // --- Module Imports ---
-console.log("Staff Module: Importing dependencies...");
-// Import functions/objects from other modules
 import * as audio from './audioModule.js'; // Audio playback functions
 import { getMidiNoteColor } from './midiColorConverter.js'; // Color conversion utility
 
@@ -27,9 +25,6 @@ import {
 } from './main.js';
 console.log("Staff Module: Dependencies imported.");
 
-
-// --- Module-Scoped Variables (Private State) ---
-console.log("Staff Module: Defining module-scoped variables...");
 
 // --- Configuration Constants (Internal to Staff Rendering) ---
 const STAFF_LINE_COLOR = '#000000';
@@ -88,8 +83,6 @@ let activeFlashes = [];         // Stores { y: number, endTime: number } for "pe
 let setAudioPauseOffsetFunc = (offset) => { // Placeholder for the callback from main.js
     console.warn("Staff Module: setAudioPauseOffsetFunc was not set during init. Dragging will not update audio offset in main.");
 };
-
-console.log("Staff Module: Module-scoped variables defined.");
 
 // --- Internal Helper Functions ---
 
