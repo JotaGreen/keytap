@@ -77,7 +77,7 @@ let playPauseButton, settingsButton, comboCountSpan, healthBarElement;
 let settingsOverlay, colorToggleSwitch, noDeathToggleSwitch, closeSettingsButton;
 let staffScaleValueSpan, staffScaleDownButton, staffScaleUpButton;
 let hitWindowValueSpan, hitWindowDownButton, hitWindowUpButton;
-scoreOverlay, scorePerfectCount, scorePerfectPercent, scoreGoodCount, scoreGoodPercent;
+let scoreOverlay, scorePerfectCount, scorePerfectPercent, scoreGoodCount, scoreGoodPercent;
 let scoreMissCount, scoreMissPercent, scoreMaxCombo, scoreTotalScore, restartButton;
 
 
