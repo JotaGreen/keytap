@@ -712,7 +712,7 @@ function applyScore(hitType) {
             comboCount = 0;
         }
     }
-    console.log(`Score Event: ${hitType.toUpperCase()} | Combo: ${comboCount} (Max: ${maxCombo}) | Health Change: ${actualHealthChange} (Raw: ${totalEnergyChange}) | Health: <span class="math-inline">\{playerHealth\}/</span>{MAX_HEALTH} | Score: <span class="math-inline">\{totalScore\} \| P\:</span>{perfectCount} G:<span class="math-inline">\{goodCount\} M\:</span>{missCount}`);
+    console.log(`Score Event: ${hitType.toUpperCase()} | Combo: ${comboCount} (Max: ${maxCombo}) | Health Change: ${actualHealthChange} (Raw: ${totalEnergyChange}) | Health: ${playerHealth}/${MAX_HEALTH} | Score: ${totalScore} | P:${perfectCount} G:${goodCount} M:${missCount}`);
     updateInfoUI();
     if (playerHealth <= MIN_HEALTH && !isGameOver) {
         if (!noDeathMode) {
@@ -857,7 +857,7 @@ function updateTimingWindows() {
     HIT_WINDOW_PERFECT_MS = Math.floor(HIT_WINDOW_GOOD_MS / 2);
     HIT_WINDOW_GOOD_SEC = HIT_WINDOW_GOOD_MS / 1000.0;
     HIT_WINDOW_PERFECT_SEC = HIT_WINDOW_PERFECT_MS / 1000.0;
-    console.log(`Timing windows updated: Good=<span class="math-inline">\{HIT\_WINDOW\_GOOD\_MS\}ms \(</span>{HIT_WINDOW_GOOD_SEC.toFixed(3)}s), Perfect=<span class="math-inline">\{HIT\_WINDOW\_PERFECT\_MS\}ms \(</span>{HIT_WINDOW_PERFECT_SEC.toFixed(3)}s)`);
+    console.log(`Timing windows updated: Good=${HIT_WINDOW_GOOD_MS}ms (${HIT_WINDOW_GOOD_SEC.toFixed(3)}s), Perfect=${HIT_WINDOW_PERFECT_MS}ms (${HIT_WINDOW_PERFECT_SEC.toFixed(3)}s)`);
 }
 
 
