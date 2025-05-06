@@ -1,7 +1,3 @@
-// main.js
-
-console.log("--- main.js started execution ---");
-
 /**
  * @file main.js
  * Main entry point and orchestrator for the Keytap game.
@@ -9,9 +5,9 @@ console.log("--- main.js started execution ---");
  * Designed to be loaded as an ES Module (<script type="module">).
  */
 
+console.log("Main: Starting execution.");
 
 // --- Module Imports ---
-console.log("Main: Importing modules...");
 // Import necessary functions/objects from other modules
 // Adjust paths/URLs as necessary
 import * as audio from './audioModule.js';
@@ -21,32 +17,24 @@ import { getMidiNoteColor } from './midiColorConverter.js';
 console.log("Main: Modules imported.");
 
 
-// --- Global Variables & State (Module-Scoped within main.js) ---
-// Export values needed by other modules (like staffModule.js)
-console.log("Main: Defining global variables and state...");
+// --- Global Variables & State ---
 
 // Game Settings & Constants
 export const INITIAL_HEALTH = 50;
-console.log(`Main: INITIAL_HEALTH set to ${INITIAL_HEALTH}`);
 export const MAX_HEALTH = 75;
-console.log(`Main: MAX_HEALTH set to ${MAX_HEALTH}`);
 export const MIN_HEALTH = 0;
-console.log(`Main: MIN_HEALTH set to ${MIN_HEALTH}`);
 export const PRE_DELAY_SECONDS = 1.0; // Delay before audio starts (used by staffModule via import)
-console.log(`Main: PRE_DELAY_SECONDS set to ${PRE_DELAY_SECONDS}`);
 
 // Scoring Constants (Can be moved to gameLogic.js later)
 const ENERGY_PERFECT = 2;
-const ENERGY_GOOD = 0; // In this version, good hits give 0 energy, only combo.
+const ENERGY_GOOD = 0; 
 const ENERGY_MISS = -5;
-console.log(`Main: Scoring constants - Perfect: ${ENERGY_PERFECT}, Good: ${ENERGY_GOOD}, Miss: ${ENERGY_MISS}`);
+
 
 // Default values (can be changed in settings)
 // Export if needed by other modules (staffModule needs SCROLL_SPEED)
 export let SCROLL_SPEED_PIXELS_PER_SECOND = 120;
-console.log(`Main: Initial SCROLL_SPEED_PIXELS_PER_SECOND: ${SCROLL_SPEED_PIXELS_PER_SECOND}`);
-let HIT_WINDOW_GOOD_MS = 140; // Settings value
-console.log(`Main: Initial HIT_WINDOW_GOOD_MS: ${HIT_WINDOW_GOOD_MS}`);
+let HIT_WINDOW_GOOD_MS = 140; 
 
 
 // Derived timing values (updated when HIT_WINDOW_GOOD_MS changes)
@@ -54,8 +42,6 @@ console.log(`Main: Initial HIT_WINDOW_GOOD_MS: ${HIT_WINDOW_GOOD_MS}`);
 export let HIT_WINDOW_PERFECT_MS = HIT_WINDOW_GOOD_MS / 2;
 export let HIT_WINDOW_GOOD_SEC = HIT_WINDOW_GOOD_MS / 1000.0;
 export let HIT_WINDOW_PERFECT_SEC = HIT_WINDOW_PERFECT_MS / 1000.0;
-console.log(`Main: Initial derived timing - Perfect MS: ${HIT_WINDOW_PERFECT_MS}, Good SEC: ${HIT_WINDOW_GOOD_SEC}, Perfect SEC: ${HIT_WINDOW_PERFECT_SEC}`);
-
 
 // Game State Variables
 let comboCount = 0;
@@ -70,8 +56,7 @@ export let useColoredNotes = false; // Export state needed by staffModule
 export let noDeathMode = false; // Export state needed by applyScore
 export let gameIsRunning = false; // Main flag for paused/playing state - Exported via function isGameRunning
 export let isGameOver = false;    // Flag for game over state - Exported via function isGameOver
-let gameInitialized = false; // **FIX:** Declare and initialize gameInitialized
-console.log(`Main: Initial game state - combo: ${comboCount}, health: ${playerHealth}, score: ${totalScore}, coloredNotes: ${useColoredNotes}, noDeath: ${noDeathMode}, gameRunning: ${gameIsRunning}, gameOver: ${isGameOver}, gameInitialized: ${gameInitialized}`);
+let gameInitialized = false; // Flag to prevent multiple initializations
 
 
 // File Loading State
@@ -79,17 +64,13 @@ let audioFileBuffer = null;
 let notesJsonData = null;
 let audioFileLoaded = false;
 let notesFileLoaded = false;
-console.log(`Main: Initial file loading state - audioLoaded: ${audioFileLoaded}, notesLoaded: ${notesFileLoaded}`);
 
 // Audio Playback State
 // This is now managed internally by staffModule dragging via a callback
 let audioPauseOffset = 0;
-console.log(`Main: Initial audioPauseOffset: ${audioPauseOffset}`);
-
 
 // --- Global DOM Element References ---
 // Assigned in window.onload listener
-console.log("Main: Declaring DOM element reference variables.");
 let loadingScreen, audioFileInput, notesFileInput, loadingStatus, startButton;
 let gameContainer, infoSection, staffSection, bottomPanel, keyboardSection;
 let playPauseButton, settingsButton, comboCountSpan, healthBarElement;
