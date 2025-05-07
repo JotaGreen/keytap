@@ -1,529 +1,757 @@
+/* Apply border-box sizing globally for easier layout */
+* {
+    box-sizing: border-box;
+    /* Disable user selection globally, can be re-enabled for specific elements if needed */
+    user-select: none;
+    -webkit-user-select: none;
+    /* Safari */
+    -moz-user-select: none;
+    /* Firefox */
+    -ms-user-select: none;
+    /* IE */
+    /* Prevent callout menu on long press (iOS) */
+    -webkit-touch-callout: none;
+    /* Improve touch interaction responsiveness */
+    touch-action: manipulation;
+    /* Allows pinch-zoom, prevents double-tap zoom */
+}
 
-        /* Apply border-box sizing globally for easier layout */
-        * {
-            box-sizing: border-box;
-            /* Disable user selection globally, can be re-enabled for specific elements if needed */
-            user-select: none;
-            -webkit-user-select: none; /* Safari */
-            -moz-user-select: none; /* Firefox */
-            -ms-user-select: none; /* IE */
-            /* Prevent callout menu on long press (iOS) */
-            -webkit-touch-callout: none;
-            /* Improve touch interaction responsiveness */
-            touch-action: manipulation; /* Allows pinch-zoom, prevents double-tap zoom */
-        }
+/* Basic body styling */
+html,
+body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    /* Prevent scrollbars on the body */
+    background-color: #f0f0f0;
+    /* Light grey background */
+    font-family: sans-serif;
+    /* Simple sans-serif font */
+    /* Prevent pull-to-refresh and other unwanted touch behaviors */
+    overscroll-behavior: none;
+}
 
-        /* Basic body styling */
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden; /* Prevent scrollbars on the body */
-            background-color: #f0f0f0; /* Light grey background */
-            font-family: sans-serif; /* Simple sans-serif font */
-            /* Prevent pull-to-refresh and other unwanted touch behaviors */
-            overscroll-behavior: none;
-        }
+/* --- Loading Screen Styles --- */
+#loadingScreen {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    /* Use flex to center content */
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: #e0e0e0;
+    padding: 20px;
+    text-align: center;
+    z-index: 2;
+    /* Ensure it's above game container */
+    position: fixed;
+    /* Cover everything */
+    top: 0;
+    left: 0;
+}
 
-        /* --- Loading Screen Styles --- */
-        #loadingScreen {
-            width: 100%;
-            height: 100%;
-            display: flex; /* Use flex to center content */
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background-color: #e0e0e0;
-            padding: 20px;
-            text-align: center;
-            z-index: 2; /* Ensure it's above game container */
-            position: fixed; /* Cover everything */
-            top: 0;
-            left: 0;
-        }
-        #loadingScreen.hidden {
-            display: none; /* Hide when game starts */
-        }
-        #loadingTitle {
-            margin-bottom: 25px;
-            color: #333;
-        }
-        .fileInputContainer {
-            margin-bottom: 15px;
-            width: 100%;
-            max-width: 350px; /* Limit width */
-        }
-        .fileInputContainer label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #555;
-        }
-        .fileInputContainer input[type="file"] {
-            display: block;
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            background-color: #fff;
-            cursor: pointer;
-        }
-        .fileInputContainer input[type="file"]::file-selector-button {
-            /* Style the button inside the input */
-            padding: 6px 12px;
-            border: 1px solid #aaa;
-            border-radius: 4px;
-            background-color: #eee;
-            cursor: pointer;
-            margin-right: 10px;
-        }
-        .fileInputContainer input[type="file"]::file-selector-button:hover {
-            background-color: #ddd;
-        }
-        #loadingStatus {
-            margin-top: 10px;
-            margin-bottom: 20px;
-            color: #666;
-            min-height: 1.2em; /* Reserve space for status */
-        }
-        #startButton {
-            padding: 12px 25px;
-            font-size: 1.1em;
-            font-weight: bold;
-            cursor: pointer;
-            border-radius: 5px;
-            border: 1px solid #888;
-            background-color: #cccccc; /* Start disabled */
-            color: #888888;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-        #startButton:not(:disabled) {
-            background-color: #4CAF50; /* Green when enabled */
-            color: white;
-            border-color: #3a8f3e;
-        }
-        #startButton:not(:disabled):hover {
-            background-color: #45a049;
-        }
-        #startButton:not(:disabled):active {
-            background-color: #3a8f3e;
-            box-shadow: inset 0 1px 2px rgba(0,0,0,0.15);
-            transform: translateY(1px);
-        }
+#loadingScreen.hidden {
+    display: none;
+    /* Hide when game starts */
+}
 
+#loadingTitle {
+    margin-bottom: 25px;
+    color: #333;
+}
 
-        /* Main game container - Full viewport, column layout by default (portrait) */
-        #gameContainer {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column; /* Default to portrait layout */
-            background-color: #e0e0e0; /* Slightly darker grey for container */
-            /* Initially hidden until files are loaded */
-            visibility: hidden; /* Use visibility to keep layout calculations */
-        }
-        #gameContainer.visible {
-            visibility: visible;
-        }
+.fileInputContainer {
+    margin-bottom: 15px;
+    width: 100%;
+    max-width: 350px;
+    /* Limit width */
+}
 
-        /* --- Layout Sections --- */
-        #infoSection {
-            background-color: #d0d0d0; /* Slightly lighter grey */
-            padding: 5px 10px;
-            display: flex;
-            flex-direction: column; /* Stack top row and health bar */
-            justify-content: center; /* Center content vertically */
-            flex-shrink: 0; /* Prevent shrinking */
-            border-bottom: 1px solid #b0b0b0;
-            overflow: hidden; /* Hide overflow */
-        }
-        #infoTopRow {
-            display: flex;
-            justify-content: space-between; /* Space out controls and combo */
-            align-items: center;
-            width: 100%;
-            margin-bottom: 5px; /* Space between top row and health bar */
-        }
-        #controlsContainer {
-             display: flex;
-             gap: clamp(4px, 1.5vmin, 8px); /* Responsive gap */
-             align-items: center; /* Align buttons and combo text */
-        }
-        #comboDisplay {
-            font-size: clamp(0.8em, 2.8vmin, 1.1em); /* Responsive font size */
-            font-weight: bold;
-            color: #333;
-            white-space: nowrap; /* Prevent wrapping */
-            margin-left: 10px; /* Space from buttons */
-        }
-        #healthBarContainer {
-            width: 100%;
-            height: clamp(10px, 3vmin, 15px); /* Responsive height */
-            background-color: #a0a0a0; /* Darker background for the bar */
-            border-radius: 5px;
-            border: 1px solid #888;
-            overflow: hidden; /* Keep the inner bar contained */
-            position: relative; /* For potential text overlay later */
-        }
-        #healthBar {
-            width: 66.66%; /* Start at 50/75 health */
-            height: 100%;
-            background-color: #4CAF50; /* Green health */
-            border-radius: 4px; /* Slightly smaller radius than container */
-            transition: width 0.3s ease-out, background-color 0.3s ease-out; /* Smooth transition for health changes */
-        }
+.fileInputContainer label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #555;
+}
 
-        #staffSection {
-            background-color: #ffffff; /* White background for the staff area */
-            flex-grow: 1; /* Takes up remaining space in column layout */
-            overflow: hidden; /* Hide canvas overflow */
-            position: relative; /* Needed for canvas positioning/sizing */
-            display: flex; /* Use flex to center canvas */
-            justify-content: center;
-            align-items: center; /* Center canvas vertically */
-            border-bottom: 1px solid #b0b0b0; /* Add border for separation */
-        }
+.fileInputContainer input[type="file"] {
+    display: block;
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #fff;
+    cursor: pointer;
+}
 
-        /* Container for bottom elements in landscape mode */
-        #bottomPanel {
-            display: flex; /* Will be row in landscape */
-            flex-shrink: 0;
-            /* Border is handled by staffSection bottom and infoSection right */
-        }
+.fileInputContainer input[type="file"]::file-selector-button {
+    /* Style the button inside the input */
+    padding: 6px 12px;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    background-color: #eee;
+    cursor: pointer;
+    margin-right: 10px;
+}
 
-        #keyboardSection {
-            background-color: #c0c0c0; /* Even lighter grey */
-            display: flex;
-            justify-content: center; /* Center the piano horizontally */
-            align-items: center; /* Center the piano vertically */
-            padding: 5px 0; /* Add some vertical padding */
-            flex-shrink: 0; /* Prevent shrinking */
-            overflow: hidden; /* Hide overflow */
-        }
+.fileInputContainer input[type="file"]::file-selector-button:hover {
+    background-color: #ddd;
+}
 
-        /* --- Responsive Layout --- */
+#loadingStatus {
+    margin-top: 10px;
+    margin-bottom: 20px;
+    color: #666;
+    min-height: 1.2em;
+    /* Reserve space for status */
+}
 
-        /* Portrait Mode (Default - Mobile First) */
-        #infoSection {
-            order: 1;
-            height: 15%; /* Top 15% */
-            border-bottom: 1px solid #b0b0b0; /* Ensure border exists */
-        }
-        #staffSection {
-            order: 2;
-            height: 50%; /* Middle 50% */
-            border-bottom: 1px solid #b0b0b0; /* Ensure border exists */
-        }
-        #bottomPanel { /* Contains only keyboard in portrait */
-            order: 3;
-            height: 35%; /* Bottom 35% */
-            border-top: none; /* Remove top border, staffSection has bottom border */
-            flex-direction: column; /* Stack elements vertically (only keyboard here) */
-        }
-         #keyboardSection {
-             width: 100%; /* Full width */
-             height: 100%; /* Full height of bottomPanel */
-             border-left: none; /* No side borders */
-         }
+#startButton {
+    padding: 12px 25px;
+    font-size: 1.1em;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 5px;
+    border: 1px solid #888;
+    background-color: #cccccc;
+    /* Start disabled */
+    color: #888888;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+#startButton:not(:disabled) {
+    background-color: #4CAF50;
+    /* Green when enabled */
+    color: white;
+    border-color: #3a8f3e;
+}
+
+#startButton:not(:disabled):hover {
+    background-color: #45a049;
+}
+
+#startButton:not(:disabled):active {
+    background-color: #3a8f3e;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+    transform: translateY(1px);
+}
 
 
-        /* Landscape Mode */
-        @media (orientation: landscape) {
-            #gameContainer {
-                /* Still column overall: Staff on top, BottomPanel below */
-                flex-direction: column;
-            }
+/* Main game container - Full viewport, column layout by default (portrait) */
+#gameContainer {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    /* Default to portrait layout */
+    background-color: #e0e0e0;
+    /* Slightly darker grey for container */
+    /* Initially hidden until files are loaded */
+    visibility: hidden;
+    /* Use visibility to keep layout calculations */
+}
 
-            #staffSection {
-                order: 1; /* Staff comes first */
-                height: 66.66%; /* Top 2/3 */
-                width: 100%; /* Full width */
-                border-bottom: 1px solid #b0b0b0; /* Keep bottom border */
-            }
+#gameContainer.visible {
+    visibility: visible;
+}
 
-            #bottomPanel {
-                order: 2; /* Panel comes second */
-                height: 33.33%; /* Bottom 1/3 */
-                width: 100%;
-                flex-direction: row; /* Arrange info and keyboard side-by-side */
-                border-top: none; /* Remove top border, staffSection has bottom border */
-            }
+/* --- Layout Sections --- */
+#infoSection {
+    background-color: #d0d0d0;
+    /* Slightly lighter grey */
+    padding: 5px 10px;
+    display: flex;
+    flex-direction: column;
+    /* Stack top row and health bar */
+    justify-content: center;
+    /* Center content vertically */
+    flex-shrink: 0;
+    /* Prevent shrinking */
+    border-bottom: 1px solid #b0b0b0;
+    overflow: hidden;
+    /* Hide overflow */
+}
 
-             #infoSection {
-                order: 1; /* Info is inside bottom panel, comes first */
-                width: 50%; /* Left half of bottom panel */
-                height: 100%; /* Full height of bottom panel */
-                border-bottom: none; /* No bottom border */
-                border-right: 1px solid #b0b0b0; /* Add border between info and keyboard */
-                justify-content: center; /* Center content vertically */
-            }
+#infoTopRow {
+    display: flex;
+    justify-content: space-between;
+    /* Space out controls and combo */
+    align-items: center;
+    width: 100%;
+    margin-bottom: 5px;
+    /* Space between top row and health bar */
+}
 
-            #keyboardSection {
-                order: 2; /* Keyboard is inside bottom panel, comes second */
-                width: 50%; /* Right half of bottom panel */
-                height: 100%; /* Full height of bottom panel */
-                padding: 10px 5px; /* Adjust padding */
-                border-left: none; /* Remove left border (infoSection has right border) */
-            }
-        }
+#controlsContainer {
+    display: flex;
+    gap: clamp(4px, 1.5vmin, 8px);
+    /* Responsive gap */
+    align-items: center;
+    /* Align buttons and combo text */
+}
 
-        /* --- Staff Canvas Styling --- */
-        #staffCanvas {
-            background-color: #ffffff; /* White background for the staff */
-            display: block; /* Remove extra space below canvas */
-            /* Let container size it, but set max limits */
-            max-width: 100%;
-            max-height: 100%;
-            /* Border is now on the container (#staffSection) */
-            box-sizing: border-box;
-            cursor: grab; /* Indicate draggable when paused */
-        }
-        #staffCanvas.dragging {
-             cursor: grabbing; /* Change cursor during drag */
-        }
+#comboDisplay {
+    font-size: clamp(0.8em, 2.8vmin, 1.1em);
+    /* Responsive font size */
+    font-weight: bold;
+    color: #333;
+    white-space: nowrap;
+    /* Prevent wrapping */
+    margin-left: 10px;
+    /* Space from buttons */
+}
 
-        /* --- Piano Keyboard Styling --- */
-        .piano {
-            display: flex; /* Use flexbox for key layout */
-            position: relative; /* Needed for positioning black keys */
-            padding: 0; /* No internal padding */
-            /* Let flexbox size it within keyboardSection */
-            width: 95%; /* Take most of the width */
-            height: 90%; /* Take most of the height */
-            max-width: 600px; /* Max width constraint */
-            max-height: 240px; /* Max height constraint */
-            background-color: transparent; /* Ensure no background */
-            border: 1px solid #999; /* Add a light border for visual structure */
-            box-shadow: 0 4px 10px rgba(0,0,0,0.15); /* Add a subtle shadow to the container */
-            border-radius: 5px; /* Slightly round the container corners */
-            overflow: hidden; /* Hide anything poking out */
-        }
+#healthBarContainer {
+    width: 100%;
+    height: clamp(10px, 3vmin, 15px);
+    /* Responsive height */
+    background-color: #a0a0a0;
+    /* Darker background for the bar */
+    border-radius: 5px;
+    border: 1px solid #888;
+    overflow: hidden;
+    /* Keep the inner bar contained */
+    position: relative;
+    /* For potential text overlay later */
+}
 
-        .key {
-            border: 1px solid #555; /* Border for definition */
-            border-top: none; /* No top border on any key */
-            border-radius: 0 0 5px 5px; /* Rounded bottom corners */
-            cursor: pointer; /* Indicate interactivity */
-            transition: background-color 0.1s ease, box-shadow 0.1s ease; /* Smooth transitions */
-            box-shadow: 0 2px 3px rgba(0,0,0,0.2); /* Subtle shadow */
-            touch-action: none; /* Prevent default touch actions like scrolling when interacting with keys */
-        }
+#healthBar {
+    width: 66.66%;
+    /* Start at 50/75 health */
+    height: 100%;
+    background-color: #4CAF50;
+    /* Green health */
+    border-radius: 4px;
+    /* Slightly smaller radius than container */
+    transition: width 0.3s ease-out, background-color 0.3s ease-out;
+    /* Smooth transition for health changes */
+}
 
-        .white {
-            /* Use flex-grow to distribute space, height relative to container */
-            flex-grow: 1;
-            height: 100%;
-            min-width: 30px; /* Minimum width */
-            background-color: #fff; /* White color */
-            z-index: 1; /* White keys behind black keys */
-            border-right: none; /* Remove right border to create seamless look */
-            border-left: none; /* Remove left border */
-        }
-        /* Add left border back to the first white key */
-        .white:first-child {
-            border-left: 1px solid #555;
-            border-radius: 0 0 0 5px; /* Adjust rounding for first key */
-        }
-         /* Add right border back to the last white key */
-        .white:last-child {
-             border-right: 1px solid #555;
-             border-radius: 0 0 5px 0; /* Adjust rounding for last key */
-        }
+#staffSection {
+    background-color: #ffffff;
+    /* White background for the staff area */
+    flex-grow: 1;
+    /* Takes up remaining space in column layout */
+    overflow: hidden;
+    /* Hide canvas overflow */
+    position: relative;
+    /* Needed for canvas positioning/sizing */
+    display: flex;
+    /* Use flex to center canvas */
+    justify-content: center;
+    align-items: center;
+    /* Center canvas vertically */
+    border-bottom: 1px solid #b0b0b0;
+    /* Add border for separation */
+}
 
-        .black {
-            /* Width relative to white keys, height relative to piano container */
-            width: 60%; /* Percentage of the white key it overlaps */
-            height: 60%; /* Percentage of the piano container height */
-            max-width: 38px; /* Max width constraint */
-            max-height: 140px; /* Max height constraint */
-            background-color: #222; /* Black color */
-            position: absolute; /* Position relative to the piano container */
-            z-index: 2; /* Black keys on top */
-            border: 1px solid #333; /* Slightly darker border for black keys */
-            border-top: none; /* No top border */
-            border-radius: 0 0 3px 3px; /* Slightly different rounding */
-            box-shadow: -1px 0 2px rgba(255,255,255,0.2) inset, 0 -2px 2px rgba(0,0,0,0.4) inset, 0 2px 3px rgba(0,0,0,0.4); /* More refined shadow */
-            /* Center the key horizontally AT the specified 'left' position */
-            transform: translateX(-50%);
-        }
+/* Container for bottom elements in landscape mode */
+#bottomPanel {
+    display: flex;
+    /* Will be row in landscape */
+    flex-shrink: 0;
+    /* Border is handled by staffSection bottom and infoSection right */
+}
 
-        /* Positioning for specific black keys - based on percentage of total piano width */
-        .black[data-key="Db"] { left: 14.28%; }  /* Gap C-D */
-        .black[data-key="Eb"] { left: 28.57%; } /* Gap D-E */
-        .black[data-key="Gb"] { left: 57.14%; } /* Gap F-G */
-        .black[data-key="Ab"] { left: 71.42%; } /* Gap G-A */
-        .black[data-key="Bb"] { left: 85.71%; } /* Gap A-B */
+#keyboardSection {
+    background-color: #c0c0c0;
+    /* Even lighter grey */
+    display: flex;
+    justify-content: center;
+    /* Center the piano horizontally */
+    align-items: center;
+    /* Center the piano vertically */
+    padding: 5px 0;
+    /* Add some vertical padding */
+    flex-shrink: 0;
+    /* Prevent shrinking */
+    overflow: hidden;
+    /* Hide overflow */
+}
 
-        /* Style for pressed keys */
-        .key.pressed {
-            background-color: #e0e0e0; /* Slightly darker gray for pressed white */
-            box-shadow: inset 0 1px 3px rgba(0,0,0,0.3); /* Inset shadow for pressed effect */
-        }
-        .black.key.pressed {
-            background-color: #444; /* Lighter black for pressed black keys */
-            box-shadow: inset -1px 0 2px rgba(255,255,255,0.1), inset 0 -1px 2px rgba(0,0,0,0.3), inset 0 1px 2px rgba(0,0,0,0.5);
-        }
+/* --- Responsive Layout --- */
 
-        /* --- Info Section Elements Styling --- */
-        .control-button {
-            /* Basic button styling */
-            padding: clamp(4px, 1.2vmin, 6px) clamp(8px, 2.2vmin, 12px); /* Responsive padding */
-            font-size: clamp(0.75em, 2.2vmin, 1em); /* Responsive font size */
-            cursor: pointer;
-            border-radius: 5px;
-            border: 1px solid #888;
-            background-color: #e8e8e8; /* Slightly lighter button */
-            white-space: nowrap; /* Prevent wrapping */
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-            line-height: 1; /* Ensure consistent height */
-        }
-        .control-button:hover {
-            background-color: #d8d8d8;
-        }
-         .control-button:active {
-             box-shadow: inset 0 1px 2px rgba(0,0,0,0.15);
-             transform: translateY(1px);
-         }
-         /* Style for disabled buttons */
-        .control-button:disabled {
-            background-color: #cccccc;
-            color: #888888;
-            cursor: not-allowed;
-            box-shadow: none;
-            transform: none;
-        }
+/* Portrait Mode (Default - Mobile First) */
+#infoSection {
+    order: 1;
+    height: 15%;
+    /* Top 15% */
+    border-bottom: 1px solid #b0b0b0;
+    /* Ensure border exists */
+}
 
-        /* --- Overlay Common Styles --- */
-        .overlay {
-            position: fixed; /* Cover the whole screen */
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.6); /* Semi-transparent black background */
-            display: none; /* Hidden by default */
-            justify-content: center;
-            align-items: center;
-            z-index: 1000; /* Ensure it's on top */
-            padding: 15px; /* Padding around the panel */
-        }
-        .overlay.visible {
-            display: flex; /* Show when visible class is added */
-        }
-        .overlay-panel {
-            background-color: #f0f0f0;
-            padding: 20px 30px;
-            border-radius: 8px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            min-width: 280px; /* Slightly wider for new controls */
-            max-width: 90%;
-            max-height: 90vh; /* Prevent panel from being too tall */
-            overflow-y: auto; /* Add scroll if content overflows */
-            display: flex;
-            flex-direction: column;
-            gap: 15px; /* Spacing between elements */
-        }
-        .overlay-panel h2 {
-            margin: 0 0 10px 0;
-            text-align: center;
-            color: #333;
-        }
+#staffSection {
+    order: 2;
+    height: 50%;
+    /* Middle 50% */
+    border-bottom: 1px solid #b0b0b0;
+    /* Ensure border exists */
+}
 
-        /* --- Settings Overlay Specific Styles --- */
-        .setting-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px; /* Add gap between label and control */
-        }
-        .setting-item label {
-            /* margin-right: 15px; Replaced by gap */
-            color: #444;
-            white-space: nowrap; /* Prevent label wrapping */
-        }
-        .setting-control {
-            display: flex;
-            align-items: center;
-            gap: 5px; /* Gap between buttons and value */
-        }
-        .setting-value {
-            min-width: 40px; /* Ensure space for value */
-            text-align: right;
-            font-weight: bold;
-            color: #333;
-        }
-        .adjust-button {
-            font-weight: bold;
-            padding: 2px 6px; /* Smaller padding */
-            font-size: 0.9em;
-            min-width: 25px; /* Ensure buttons have some width */
-            line-height: 1;
-        }
+#bottomPanel {
+    /* Contains only keyboard in portrait */
+    order: 3;
+    height: 35%;
+    /* Bottom 35% */
+    border-top: none;
+    /* Remove top border, staffSection has bottom border */
+    flex-direction: column;
+    /* Stack elements vertically (only keyboard here) */
+}
 
-        /* Basic Toggle Switch Styling */
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 50px; /* Width of the switch */
-            height: 24px; /* Height of the switch */
-            flex-shrink: 0; /* Prevent switch from shrinking */
-        }
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
-            border-radius: 24px; /* Make it rounded */
-        }
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 18px; /* Size of the knob */
-            width: 18px;
-            left: 3px; /* Padding from left */
-            bottom: 3px; /* Padding from bottom */
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%; /* Make it circular */
-        }
-        input:checked + .slider {
-            background-color: #4CAF50; /* Green when checked */
-        }
-        input:checked + .slider:before {
-            transform: translateX(26px); /* Move knob to the right */
-        }
-        #closeSettingsButton {
-            align-self: center; /* Center the close button */
-            margin-top: 10px;
-        }
+#keyboardSection {
+    width: 100%;
+    /* Full width */
+    height: 100%;
+    /* Full height of bottomPanel */
+    border-left: none;
+    /* No side borders */
+}
 
-        /* --- Score Overlay Specific Styles --- */
-        #scoreStats {
-            display: grid;
-            grid-template-columns: auto 1fr; /* Label and value columns */
-            gap: 5px 15px; /* Row gap, Column gap */
-            align-items: center;
-        }
-        #scoreStats dt { /* Definition Term (Label) */
-            font-weight: bold;
-            text-align: right;
-            color: #555;
-        }
-        #scoreStats dd { /* Definition Description (Value) */
-            margin: 0; /* Reset default margin */
-            text-align: left;
-        }
-        #restartButton {
-             align-self: center; /* Center the restart button */
-             margin-top: 15px;
-        }
+
+/* Landscape Mode */
+@media (orientation: landscape) {
+    #gameContainer {
+        /* Still column overall: Staff on top, BottomPanel below */
+        flex-direction: column;
+    }
+
+    #staffSection {
+        order: 1;
+        /* Staff comes first */
+        height: 66.66%;
+        /* Top 2/3 */
+        width: 100%;
+        /* Full width */
+        border-bottom: 1px solid #b0b0b0;
+        /* Keep bottom border */
+    }
+
+    #bottomPanel {
+        order: 2;
+        /* Panel comes second */
+        height: 33.33%;
+        /* Bottom 1/3 */
+        width: 100%;
+        flex-direction: row;
+        /* Arrange info and keyboard side-by-side */
+        border-top: none;
+        /* Remove top border, staffSection has bottom border */
+    }
+
+    #infoSection {
+        order: 1;
+        /* Info is inside bottom panel, comes first */
+        width: 50%;
+        /* Left half of bottom panel */
+        height: 100%;
+        /* Full height of bottom panel */
+        border-bottom: none;
+        /* No bottom border */
+        border-right: 1px solid #b0b0b0;
+        /* Add border between info and keyboard */
+        justify-content: center;
+        /* Center content vertically */
+    }
+
+    #keyboardSection {
+        order: 2;
+        /* Keyboard is inside bottom panel, comes second */
+        width: 50%;
+        /* Right half of bottom panel */
+        height: 100%;
+        /* Full height of bottom panel */
+        padding: 10px 5px;
+        /* Adjust padding */
+        border-left: none;
+        /* Remove left border (infoSection has right border) */
+    }
+}
+
+/* --- Staff Canvas Styling --- */
+#staffCanvas {
+    background-color: #ffffff;
+    /* White background for the staff */
+    display: block;
+    /* Remove extra space below canvas */
+    /* Let container size it, but set max limits */
+    max-width: 100%;
+    max-height: 100%;
+    /* Border is now on the container (#staffSection) */
+    box-sizing: border-box;
+    cursor: grab;
+    /* Indicate draggable when paused */
+}
+
+#staffCanvas.dragging {
+    cursor: grabbing;
+    /* Change cursor during drag */
+}
+
+/* --- Piano Keyboard Styling --- */
+.piano {
+    display: flex;
+    /* Use flexbox for key layout */
+    position: relative;
+    /* Needed for positioning black keys */
+    padding: 0;
+    /* No internal padding */
+    /* Let flexbox size it within keyboardSection */
+    width: 95%;
+    /* Take most of the width */
+    height: 90%;
+    /* Take most of the height */
+    max-width: 600px;
+    /* Max width constraint */
+    max-height: 240px;
+    /* Max height constraint */
+    background-color: transparent;
+    /* Ensure no background */
+    border: 1px solid #999;
+    /* Add a light border for visual structure */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+    /* Add a subtle shadow to the container */
+    border-radius: 5px;
+    /* Slightly round the container corners */
+    overflow: hidden;
+    /* Hide anything poking out */
+}
+
+.key {
+    border: 1px solid #555;
+    /* Border for definition */
+    border-top: none;
+    /* No top border on any key */
+    border-radius: 0 0 5px 5px;
+    /* Rounded bottom corners */
+    cursor: pointer;
+    /* Indicate interactivity */
+    transition: background-color 0.1s ease, box-shadow 0.1s ease;
+    /* Smooth transitions */
+    box-shadow: 0 2px 3px rgba(0, 0, 0, 0.2);
+    /* Subtle shadow */
+    touch-action: none;
+    /* Prevent default touch actions like scrolling when interacting with keys */
+}
+
+.white {
+    /* Use flex-grow to distribute space, height relative to container */
+    flex-grow: 1;
+    height: 100%;
+    min-width: 30px;
+    /* Minimum width */
+    background-color: #fff;
+    /* White color */
+    z-index: 1;
+    /* White keys behind black keys */
+    border-right: none;
+    /* Remove right border to create seamless look */
+    border-left: none;
+    /* Remove left border */
+}
+
+/* Add left border back to the first white key */
+.white:first-child {
+    border-left: 1px solid #555;
+    border-radius: 0 0 0 5px;
+    /* Adjust rounding for first key */
+}
+
+/* Add right border back to the last white key */
+.white:last-child {
+    border-right: 1px solid #555;
+    border-radius: 0 0 5px 0;
+    /* Adjust rounding for last key */
+}
+
+.black {
+    /* Width relative to white keys, height relative to piano container */
+    width: 60%;
+    /* Percentage of the white key it overlaps */
+    height: 60%;
+    /* Percentage of the piano container height */
+    max-width: 38px;
+    /* Max width constraint */
+    max-height: 140px;
+    /* Max height constraint */
+    background-color: #222;
+    /* Black color */
+    position: absolute;
+    /* Position relative to the piano container */
+    z-index: 2;
+    /* Black keys on top */
+    border: 1px solid #333;
+    /* Slightly darker border for black keys */
+    border-top: none;
+    /* No top border */
+    border-radius: 0 0 3px 3px;
+    /* Slightly different rounding */
+    box-shadow: -1px 0 2px rgba(255, 255, 255, 0.2) inset, 0 -2px 2px rgba(0, 0, 0, 0.4) inset, 0 2px 3px rgba(0, 0, 0, 0.4);
+    /* More refined shadow */
+    /* Center the key horizontally AT the specified 'left' position */
+    transform: translateX(-50%);
+}
+
+/* Positioning for specific black keys - based on percentage of total piano width */
+.black[data-key="Db"] {
+    left: 14.28%;
+}
+
+/* Gap C-D */
+.black[data-key="Eb"] {
+    left: 28.57%;
+}
+
+/* Gap D-E */
+.black[data-key="Gb"] {
+    left: 57.14%;
+}
+
+/* Gap F-G */
+.black[data-key="Ab"] {
+    left: 71.42%;
+}
+
+/* Gap G-A */
+.black[data-key="Bb"] {
+    left: 85.71%;
+}
+
+/* Gap A-B */
+
+/* Style for pressed keys */
+.key.pressed {
+    background-color: #e0e0e0;
+    /* Slightly darker gray for pressed white */
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+    /* Inset shadow for pressed effect */
+}
+
+.black.key.pressed {
+    background-color: #444;
+    /* Lighter black for pressed black keys */
+    box-shadow: inset -1px 0 2px rgba(255, 255, 255, 0.1), inset 0 -1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* --- Info Section Elements Styling --- */
+.control-button {
+    /* Basic button styling */
+    padding: clamp(4px, 1.2vmin, 6px) clamp(8px, 2.2vmin, 12px);
+    /* Responsive padding */
+    font-size: clamp(0.75em, 2.2vmin, 1em);
+    /* Responsive font size */
+    cursor: pointer;
+    border-radius: 5px;
+    border: 1px solid #888;
+    background-color: #e8e8e8;
+    /* Slightly lighter button */
+    white-space: nowrap;
+    /* Prevent wrapping */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    line-height: 1;
+    /* Ensure consistent height */
+}
+
+.control-button:hover {
+    background-color: #d8d8d8;
+}
+
+.control-button:active {
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+    transform: translateY(1px);
+}
+
+/* Style for disabled buttons */
+.control-button:disabled {
+    background-color: #cccccc;
+    color: #888888;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+/* --- Overlay Common Styles --- */
+.overlay {
+    position: fixed;
+    /* Cover the whole screen */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    /* Semi-transparent black background */
+    display: none;
+    /* Hidden by default */
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    /* Ensure it's on top */
+    padding: 15px;
+    /* Padding around the panel */
+}
+
+.overlay.visible {
+    display: flex;
+    /* Show when visible class is added */
+}
+
+.overlay-panel {
+    background-color: #f0f0f0;
+    padding: 20px 30px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    min-width: 280px;
+    /* Slightly wider for new controls */
+    max-width: 90%;
+    max-height: 90vh;
+    /* Prevent panel from being too tall */
+    overflow-y: auto;
+    /* Add scroll if content overflows */
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    /* Spacing between elements */
+}
+
+.overlay-panel h2 {
+    margin: 0 0 10px 0;
+    text-align: center;
+    color: #333;
+}
+
+/* --- Settings Overlay Specific Styles --- */
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    /* Add gap between label and control */
+}
+
+.setting-item label {
+    /* margin-right: 15px; Replaced by gap */
+    color: #444;
+    white-space: nowrap;
+    /* Prevent label wrapping */
+}
+
+.setting-control {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    /* Gap between buttons and value */
+}
+
+.setting-value {
+    min-width: 40px;
+    /* Ensure space for value */
+    text-align: right;
+    font-weight: bold;
+    color: #333;
+}
+
+.adjust-button {
+    font-weight: bold;
+    padding: 2px 6px;
+    /* Smaller padding */
+    font-size: 0.9em;
+    min-width: 25px;
+    /* Ensure buttons have some width */
+    line-height: 1;
+}
+
+/* Basic Toggle Switch Styling */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    /* Width of the switch */
+    height: 24px;
+    /* Height of the switch */
+    flex-shrink: 0;
+    /* Prevent switch from shrinking */
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 24px;
+    /* Make it rounded */
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    /* Size of the knob */
+    width: 18px;
+    left: 3px;
+    /* Padding from left */
+    bottom: 3px;
+    /* Padding from bottom */
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+    /* Make it circular */
+}
+
+input:checked+.slider {
+    background-color: #4CAF50;
+    /* Green when checked */
+}
+
+input:checked+.slider:before {
+    transform: translateX(26px);
+    /* Move knob to the right */
+}
+
+#closeSettingsButton {
+    align-self: center;
+    /* Center the close button */
+    margin-top: 10px;
+}
+
+/* --- Score Overlay Specific Styles --- */
+#scoreStats {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    /* Label and value columns */
+    gap: 5px 15px;
+    /* Row gap, Column gap */
+    align-items: center;
+}
+
+#scoreStats dt {
+    /* Definition Term (Label) */
+    font-weight: bold;
+    text-align: right;
+    color: #555;
+}
+
+#scoreStats dd {
+    /* Definition Description (Value) */
+    margin: 0;
+    /* Reset default margin */
+    text-align: left;
+}
+
+#restartButton {
+    align-self: center;
+    /* Center the restart button */
+    margin-top: 15px;
+}
