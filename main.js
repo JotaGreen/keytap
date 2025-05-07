@@ -477,7 +477,14 @@ function setupGlobalEventListeners() {
                 // noDeathMode is a setting, typically not reset by restart, but can be included if needed
             };
             const modules = { audio, staff };
-            const uiAccess = { scoreOverlay, playPauseButton, settingsButton, updateInfoUI };
+            // Pass main.js's updateInfoUI directly. gameLogic.restartGame will call it.
+            // However, ensure main.js's state is updated *before* its own updateInfoUI is most effective.
+            const uiAccess = {
+                scoreOverlay,
+                playPauseButton,
+                settingsButton,
+                updateInfoUI // gameLogic will call this with the state *it* knows.
+            };
 
             gameLogic.restartGame(currentLogicGameState, modules, uiAccess);
 
@@ -492,7 +499,12 @@ function setupGlobalEventListeners() {
             isGameOver = currentLogicGameState.isGameOver;
             gameIsRunning = currentLogicGameState.gameIsRunning;
             audioPauseOffset = currentLogicGameState.audioPauseOffset;
-            console.log("Main: Game state reset via gameLogic.restartGame. Health:", playerHealth);
+
+            // Explicitly call updateInfoUI() AGAIN here in main.js,
+            // AFTER main.js's own state variables have been updated.
+            // This ensures the UI reflects the truly reset state managed by main.js.
+            updateInfoUI();
+            console.log("Main: Game state reset via gameLogic.restartGame and UI updated. Health:", playerHealth);
         });
         console.log("Main (setupGlobalEventListeners): Restart button listener attached.");
     } else {
