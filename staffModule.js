@@ -351,9 +351,9 @@ function drawNote(note, currentDisplayTime) {
     const noteY = note.y; // Center Y position of the note head
     // Calculate time until the note reaches the judgment line, relative to current display time
     const timeUntilJudgment = note.time - currentDisplayTime;
-    // Calculate X position based on time and scroll speed (imported SCROLL_SPEED_PIXELS_PER_SECOND)
-    const noteX = judgmentLineX + (timeUntilJudgment * SCROLL_SPEED_PIXELS_PER_SECOND);
-    const noteWidth = Math.max(1, note.duration * SCROLL_SPEED_PIXELS_PER_SECOND); // Ensure minimum width of 1px
+    // Calculate X position based on time and scroll speed (imported scrollSpeedPixelsPerSecond)
+    const noteX = judgmentLineX + (timeUntilJudgment * scrollSpeedPixelsPerSecond);
+    const noteWidth = Math.max(1, note.duration * scrollSpeedPixelsPerSecond); // Ensure minimum width of 1px
     const noteHeight = LINE_SPACING; // Note head height is one line spacing
 
     // Determine note color (uses imported `useColoredNotes` state and `getMidiNoteColor` function)
@@ -484,8 +484,8 @@ function animationLoop() {
 
     // --- Check for Missed Notes ---
     // A note is missed if its start time is past the judgment line + good hit window, and it wasn't hit.
-    // Uses imported `HIT_WINDOW_GOOD_SEC` from main.js
-    const missThresholdTime = displayTime - HIT_WINDOW_GOOD_SEC; // Time beyond which a note is considered a miss if not hit
+    // Uses imported `hitWindowGoodSec` from main.js
+    const missThresholdTime = displayTime - hitWindowGoodSec; // Time beyond which a note is considered a miss if not hit
     notesToDraw.forEach(note => {
         if (!note.hitStatus && note.time < missThresholdTime) {
             // console.log(`Staff Module (animationLoop): Note missed: ${note.name} at time ${note.time.toFixed(3)} (displayTime: ${displayTime.toFixed(3)})`);
@@ -528,8 +528,8 @@ function judgeKeyPressInternal(keyName) {
         const timeDiff = note.time - currentJudgmentTime; // Positive if note is upcoming, negative if past
         const absTimeDiff = Math.abs(timeDiff);
 
-        // Check if within the 'good' hit window (imported HIT_WINDOW_GOOD_SEC)
-        if (absTimeDiff <= HIT_WINDOW_GOOD_SEC) {
+        // Check if within the 'good' hit window (imported hitWindowGoodSec)
+        if (absTimeDiff <= hitWindowGoodSec) {
             const notePitchClass = getPitchClass(note.name); // Internal helper
             if (notePitchClass === keyName) { // Check if the pressed key matches the note's pitch class
                 if (absTimeDiff < minTimeDiff) {
@@ -544,8 +544,8 @@ function judgeKeyPressInternal(keyName) {
         // console.log(`Staff Module (judgeKeyPressInternal): Best note found: ${bestNote.name}, timeDiff: ${minTimeDiff.toFixed(3)}s`);
         const flashEndTimeContext = audio.getCurrentContextTime() + (PERFECT_FLASH_DURATION_MS / 1000.0);
 
-        // Check if within 'perfect' hit window (imported HIT_WINDOW_PERFECT_SEC)
-        if (minTimeDiff <= HIT_WINDOW_PERFECT_SEC) {
+        // Check if within 'perfect' hit window (imported hitWindowPerfectSec)
+        if (minTimeDiff <= hitWindowPerfectSec) {
             bestNote.hitStatus = 'perfect';
             hitResult = 'perfect';
             activeFlashes.push({ y: bestNote.y, endTime: flashEndTimeContext }); // Add flash effect
@@ -693,8 +693,8 @@ function handleDragMove(event) {
         // console.log("Staff Module (handleDragMove): Drag Move detected.");
         const currentX = getEventX(event) - canvas.getBoundingClientRect().left;
         const deltaX = currentX - dragStartX; // Pixel difference from drag start
-        // Convert pixel offset to time offset (imported SCROLL_SPEED_PIXELS_PER_SECOND)
-        const deltaTimeOffset = deltaX / SCROLL_SPEED_PIXELS_PER_SECOND;
+        // Convert pixel offset to time offset (imported scrollSpeedPixelsPerSecond)
+        const deltaTimeOffset = deltaX / scrollSpeedPixelsPerSecond;
 
         // New display time: start time - offset (dragging left moves time forward, right moves backward)
         displayTime = Math.max(MIN_DISPLAY_TIME, dragStartTime - deltaTimeOffset);
