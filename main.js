@@ -33,7 +33,7 @@ const ENERGY_MISS = -5;
 
 // Default values (can be changed in settings)
 // Export if needed by other modules (staffModule needs SCROLL_SPEED)
-export let ScrollSpeedPixelsPerSecond = 120;
+export let scrollSpeedPixelsPerSecond = 120;
 let hitWindowGoodMs = 140; 
 
 
@@ -313,7 +313,7 @@ function updateSettingsUI() {
     updateTimingWindows(); // Recalculate derived timing windows first
 
     if (staffScaleValueSpan) {
-        staffScaleValueSpan.textContent = ScrollSpeedPixelsPerSecond;
+        staffScaleValueSpan.textContent = scrollSpeedPixelsPerSecond;
     }
     if (hitWindowValueSpan) {
         hitWindowValueSpan.textContent = hitWindowGoodMs;
@@ -618,14 +618,14 @@ function setupGlobalEventListeners() {
      const STAFF_SCALE_MAX = 200;
      if (staffScaleDownButton && staffScaleUpButton && staff) {
          staffScaleDownButton.addEventListener('click', () => {
-             ScrollSpeedPixelsPerSecond = Math.max(STAFF_SCALE_MIN, ScrollSpeedPixelsPerSecond - STAFF_SCALE_STEP);
-             console.log(`Main: Staff scale decreased to: ${ScrollSpeedPixelsPerSecond}`);
+             scrollSpeedPixelsPerSecond = Math.max(STAFF_SCALE_MIN, scrollSpeedPixelsPerSecond - STAFF_SCALE_STEP);
+             console.log(`Main: Staff scale decreased to: ${scrollSpeedPixelsPerSecond}`);
              updateSettingsUI(); // Update display
              if (staff) staff.redraw(); // Redraw staff
          });
          staffScaleUpButton.addEventListener('click', () => {
-             ScrollSpeedPixelsPerSecond = Math.min(STAFF_SCALE_MAX, ScrollSpeedPixelsPerSecond + STAFF_SCALE_STEP);
-             console.log(`Main: Staff scale increased to: ${ScrollSpeedPixelsPerSecond}`);
+             scrollSpeedPixelsPerSecond = Math.min(STAFF_SCALE_MAX, scrollSpeedPixelsPerSecond + STAFF_SCALE_STEP);
+             console.log(`Main: Staff scale increased to: ${scrollSpeedPixelsPerSecond}`);
              updateSettingsUI(); // Update display
              if (staff) staff.redraw(); // Redraw staff
          });
