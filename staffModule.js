@@ -19,9 +19,9 @@ import {
     isGameOver,
     useColoredNotes,
     PRE_DELAY_SECONDS,
-    SCROLL_SPEED_PIXELS_PER_SECOND,
-    HIT_WINDOW_GOOD_SEC,
-    HIT_WINDOW_PERFECT_SEC
+    scrollSpeedPixelsPerSecond,
+    hitWindowGoodSec,
+    hitWindowPerfectSec
 } from './main.js';
 console.log("Staff Module: Dependencies imported.");
 
