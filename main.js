@@ -33,15 +33,15 @@ const ENERGY_MISS = -5;
 
 // Default values (can be changed in settings)
 // Export if needed by other modules (staffModule needs SCROLL_SPEED)
-export let SCROLL_SPEED_PIXELS_PER_SECOND = 120;
-let HIT_WINDOW_GOOD_MS = 140; 
+export let ScrollSpeedPixelsPerSecond = 120;
+let hitWindowGoodMs = 140; 
 
 
-// Derived timing values (updated when HIT_WINDOW_GOOD_MS changes)
+// Derived timing values (updated when hitWindowGoodMs changes)
 // Export if needed by other modules (staffModule needs these)
-export let HIT_WINDOW_PERFECT_MS = HIT_WINDOW_GOOD_MS / 2;
-export let HIT_WINDOW_GOOD_SEC = HIT_WINDOW_GOOD_MS / 1000.0;
-export let HIT_WINDOW_PERFECT_SEC = HIT_WINDOW_PERFECT_MS / 1000.0;
+export let hitWindowPerfectMs = hitWindowGoodMs / 2;
+export let hitWindowGoodSec = hitWindowGoodMs / 1000.0;
+export let hitWindowPerfectSec = hitWindowPerfectMs / 1000.0;
 
 // Game State Variables
 let comboCount = 0;
@@ -222,7 +222,7 @@ export function triggerGameOver(songFinished) {
 
 
 /**
- * Resets the game state for a new game.
+ * Resets the game state for a new game, keeping the loaded files.
  * Clears scores, health, combo, and resets audio/staff modules.
  */
 function restartGame() {
@@ -275,11 +275,9 @@ function restartGame() {
         console.log("Main (restartGame): Settings button reset.");
     }
 
-    console.log("Main (restartGame): Game reset complete. Ready for new file selection or start.");
-    // Note: This function doesn't automatically go back to the loading screen.
-    // That's handled by the "Restart" button on the score screen which reloads the page or re-shows loading.
-    // For a true in-app restart without reload, you'd hide gameContainer and show loadingScreen.
+    console.log("Main (restartGame): Game reset complete.");
 }
+// End of game logic (to be moved to gameLogic.js)
 
 
 // --- UI Update Functions ---
@@ -315,10 +313,10 @@ function updateSettingsUI() {
     updateTimingWindows(); // Recalculate derived timing windows first
 
     if (staffScaleValueSpan) {
-        staffScaleValueSpan.textContent = SCROLL_SPEED_PIXELS_PER_SECOND;
+        staffScaleValueSpan.textContent = ScrollSpeedPixelsPerSecond;
     }
     if (hitWindowValueSpan) {
-        hitWindowValueSpan.textContent = HIT_WINDOW_GOOD_MS;
+        hitWindowValueSpan.textContent = hitWindowGoodMs;
     }
     if (colorToggleSwitch) {
         colorToggleSwitch.checked = useColoredNotes;
@@ -410,11 +408,12 @@ function handleLayoutChange() {
  * This function is exported as these variables are used by staffModule.
  */
 export function updateTimingWindows() {
-    HIT_WINDOW_PERFECT_MS = Math.floor(HIT_WINDOW_GOOD_MS / 2); // Perfect is half of good
-    HIT_WINDOW_GOOD_SEC = HIT_WINDOW_GOOD_MS / 1000.0;
-    HIT_WINDOW_PERFECT_SEC = HIT_WINDOW_PERFECT_MS / 1000.0;
-    console.log(`Main (updateTimingWindows): Timing windows updated: Good=${HIT_WINDOW_GOOD_MS}ms (${HIT_WINDOW_GOOD_SEC.toFixed(3)}s), Perfect=${HIT_WINDOW_PERFECT_MS}ms (${HIT_WINDOW_PERFECT_SEC.toFixed(3)}s)`);
+    hitWindowPerfectMs = Math.floor(hitWindowGoodMs / 2); // Perfect is half of good
+    hitWindowGoodSec = hitWindowGoodMs / 1000.0;
+    hitWindowPerfectSec = hitWindowPerfectMs / 1000.0;
+    console.log(`Main (updateTimingWindows): Timing windows updated: Good=${hitWindowGoodMs}ms (${hitWindowGoodSec.toFixed(3)}s), Perfect=${hitWindowPerfectMs}ms (${hitWindowPerfectSec.toFixed(3)}s)`);
 }
+// End of UI content (to be moved to ui.js)
 
 
 // --- Game Initialization ---
@@ -619,14 +618,14 @@ function setupGlobalEventListeners() {
      const STAFF_SCALE_MAX = 200;
      if (staffScaleDownButton && staffScaleUpButton && staff) {
          staffScaleDownButton.addEventListener('click', () => {
-             SCROLL_SPEED_PIXELS_PER_SECOND = Math.max(STAFF_SCALE_MIN, SCROLL_SPEED_PIXELS_PER_SECOND - STAFF_SCALE_STEP);
-             console.log(`Main: Staff scale decreased to: ${SCROLL_SPEED_PIXELS_PER_SECOND}`);
+             ScrollSpeedPixelsPerSecond = Math.max(STAFF_SCALE_MIN, ScrollSpeedPixelsPerSecond - STAFF_SCALE_STEP);
+             console.log(`Main: Staff scale decreased to: ${ScrollSpeedPixelsPerSecond}`);
              updateSettingsUI(); // Update display
              if (staff) staff.redraw(); // Redraw staff
          });
          staffScaleUpButton.addEventListener('click', () => {
-             SCROLL_SPEED_PIXELS_PER_SECOND = Math.min(STAFF_SCALE_MAX, SCROLL_SPEED_PIXELS_PER_SECOND + STAFF_SCALE_STEP);
-             console.log(`Main: Staff scale increased to: ${SCROLL_SPEED_PIXELS_PER_SECOND}`);
+             ScrollSpeedPixelsPerSecond = Math.min(STAFF_SCALE_MAX, ScrollSpeedPixelsPerSecond + STAFF_SCALE_STEP);
+             console.log(`Main: Staff scale increased to: ${ScrollSpeedPixelsPerSecond}`);
              updateSettingsUI(); // Update display
              if (staff) staff.redraw(); // Redraw staff
          });
@@ -641,14 +640,14 @@ function setupGlobalEventListeners() {
      const HIT_WINDOW_MAX = 200; // Maximum 200ms good window
      if (hitWindowDownButton && hitWindowUpButton) {
          hitWindowDownButton.addEventListener('click', () => {
-             HIT_WINDOW_GOOD_MS = Math.max(HIT_WINDOW_MIN, HIT_WINDOW_GOOD_MS - HIT_WINDOW_STEP);
-             console.log(`Main: Hit window decreased to: ${HIT_WINDOW_GOOD_MS}ms`);
+             hitWindowGoodMs = Math.max(HIT_WINDOW_MIN, hitWindowGoodMs - HIT_WINDOW_STEP);
+             console.log(`Main: Hit window decreased to: ${hitWindowGoodMs}ms`);
              updateSettingsUI(); // This calls updateTimingWindows()
              // No need to redraw staff unless it visually represents hit windows, which it doesn't.
          });
          hitWindowUpButton.addEventListener('click', () => {
-             HIT_WINDOW_GOOD_MS = Math.min(HIT_WINDOW_MAX, HIT_WINDOW_GOOD_MS + HIT_WINDOW_STEP);
-             console.log(`Main: Hit window increased to: ${HIT_WINDOW_GOOD_MS}ms`);
+             hitWindowGoodMs = Math.min(HIT_WINDOW_MAX, hitWindowGoodMs + HIT_WINDOW_STEP);
+             console.log(`Main: Hit window increased to: ${hitWindowGoodMs}ms`);
              updateSettingsUI(); // This calls updateTimingWindows()
          });
          console.log("Main (setupGlobalEventListeners): Hit window adjustment listeners attached.");
