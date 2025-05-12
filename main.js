@@ -76,7 +76,6 @@ let scoreMissCount, scoreMissPercent, scoreMaxCombo, scoreTotalScore, restartBut
 
 
 // --- Bridge Functions to Game Logic ---
-console.log("Main: Defining bridge functions to gameLogic.js.");
 
 /**
  * Bridge function called by staffModule when a note is judged.
@@ -163,9 +162,9 @@ function handleSongEnd() {
         triggerGameOverInternal(true); // True indicates song finished naturally
     }
 }
+// --- End of Bridge Funtions Section
 
-// --- UI Update Functions ---
-console.log("Main: Defining UI update functions.");
+// --- UI Section ---
 
 /** Updates the health bar and combo display on the UI. */
 function updateInfoUI() {
@@ -230,10 +229,6 @@ function showScoreScreen() {
     console.log("Main (showScoreScreen): Score screen displayed.");
 }
 
-
-// --- Layout & Timing Functions ---
-console.log("Main: Defining layout and timing functions.");
-
 /** Handles layout adjustments on orientation change or resize. */
 function handleLayoutChange() {
     console.log("Main (handleLayoutChange): Adjusting layout for orientation/resize.");
@@ -275,10 +270,10 @@ export function updateTimingWindows() {
     hitWindowPerfectSec = hitWindowPerfectMs / 1000.0;
     console.log(`Main (updateTimingWindows): Good=${hitWindowGoodMs}ms (${hitWindowGoodSec.toFixed(3)}s), Perfect=${hitWindowPerfectMs}ms (${hitWindowPerfectSec.toFixed(3)}s)`);
 }
+// --- End of UI section
 
 
-// --- Game Initialization ---
-console.log("Main: Defining game initialization functions.");
+// --- Game Initialization Section ---
 
 /**
  * Initializes all game modules and sets up event listeners
