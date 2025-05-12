@@ -1,8 +1,8 @@
 /**
  * @file main.js
  * Main entry point and orchestrator for the Keytap game.
- * Loads modules, initializes the game, handles global state and UI updates.
- * Interacts with gameLogic.js for core game mechanics.
+ * Loads modules, initializes the game, handles global state, file loading,
+ * and acts as the central coordinator between different modules (audio, staff, keyboard, gameLogic, ui).
  * Designed to be loaded as an ES Module (<script type="module">).
  */
 
@@ -12,8 +12,8 @@ console.log("Main: Starting execution.");
 import * as audio from './audioModule.js';
 import { init as initKeyboard } from './keyboardModule.js';
 import * as staff from './staffModule.js';
-// Import the new game logic module
 import * as gameLogic from './gameLogic.js';
+import * as ui from './ui.js'; // Import the new UI module
 // midiColorConverter is imported directly by staffModule where needed.
 console.log("Main: Modules imported.");
 
@@ -24,7 +24,7 @@ console.log("Main: Modules imported.");
 // PRE_DELAY_SECONDS is specific to main's orchestration with audio/staff
 export const PRE_DELAY_SECONDS = 1.0; // Delay before audio starts (used by staffModule via import)
 
-// Default values for settings (can be changed in UI)
+// Default values for settings (can be changed via UI callbacks)
 export let scrollSpeedPixelsPerSecond = 120; // Exported for staffModule
 let hitWindowGoodMs = 140;
 
@@ -36,8 +36,7 @@ export let hitWindowPerfectSec = hitWindowPerfectMs / 1000.0;
 
 // Game State Variables - Managed by main.js
 let comboCount = 0;
-// Player health is initialized using a constant from gameLogic.js
-let playerHealth = gameLogic.INITIAL_HEALTH;
+let playerHealth = gameLogic.INITIAL_HEALTH; // Initialized using constant from gameLogic
 let totalScore = 0;
 let perfectCount = 0;
 let goodCount = 0;
@@ -45,42 +44,314 @@ let missCount = 0;
 let maxCombo = 0;
 let totalNotesInSong = 0; // Calculated after notes are loaded
 
-export let useColoredNotes = false; // Exported for staffModule
-export let noDeathMode = false;     // Game continues even if health is 0
+export let useColoredNotes = false; // Exported for staffModule, updated via UI callback
+export let noDeathMode = false;     // Updated via UI callback
 export let gameIsRunning = false;   // Main flag for paused/playing state
 export let isGameOver = false;      // Flag for game over state
 
 let gameInitialized = false; // Flag to prevent multiple initializations
 
 // File Loading State
-let audioFileBuffer = null;
-let notesJsonData = null;
-let audioFileLoaded = false;
-let notesFileLoaded = false;
+let audioFileBuffer = null; // Holds the ArrayBuffer of the loaded audio file
+let notesJsonData = null;   // Holds the parsed JSON object of the notes file
+let audioFileReady = false; // Flag indicating audio file is loaded and processed
+let notesFileReady = false; // Flag indicating notes file is loaded and parsed
 
 // Audio Playback State
-// This is primarily managed by staffModule and audioModule,
-// main.js stores the offset when paused via settings or play/pause button.
+// This offset is updated when the game is paused (either by user or settings)
+// It's used by staff.play() and audio.play() when resuming.
 let audioPauseOffset = 0;
 
-// --- Global DOM Element References ---
-// Assigned in window.onload listener
-let loadingScreen, audioFileInput, notesFileInput, loadingStatus, startButton;
-let gameContainer, infoSection, staffSection, bottomPanel, keyboardSection;
-let playPauseButton, settingsButton, comboCountSpan, healthBarElement;
-let settingsOverlay, colorToggleSwitch, noDeathToggleSwitch, closeSettingsButton;
-let staffScaleValueSpan, staffScaleDownButton, staffScaleUpButton;
-let hitWindowValueSpan, hitWindowDownButton, hitWindowUpButton;
-let scoreOverlay, scorePerfectCount, scorePerfectPercent, scoreGoodCount, scoreGoodPercent;
-let scoreMissCount, scoreMissPercent, scoreMaxCombo, scoreTotalScore, restartButton;
+// --- Timing Window Calculation ---
+
+/**
+ * Recalculates derived timing window variables (seconds and perfect ms)
+ * based on the current `hitWindowGoodMs`. This needs to be called whenever
+ * `hitWindowGoodMs` changes. The derived variables are exported and used by staffModule.
+ */
+export function updateTimingWindows() {
+    hitWindowPerfectMs = Math.floor(hitWindowGoodMs / 2);
+    hitWindowGoodSec = hitWindowGoodMs / 1000.0;
+    hitWindowPerfectSec = hitWindowPerfectMs / 1000.0;
+    console.log(`Main (updateTimingWindows): Good=${hitWindowGoodMs}ms (${hitWindowGoodSec.toFixed(3)}s), Perfect=${hitWindowPerfectMs}ms (${hitWindowPerfectSec.toFixed(3)}s)`);
+}
+
+// --- File Loading Logic ---
+console.log("Main: Defining file loading logic.");
+
+/**
+ * Handles the file selection event triggered by the UI module.
+ * Reads the selected file (audio or notes) and updates the corresponding state.
+ * @param {'audio' | 'notes'} fileType - The type of file selected.
+ * @param {File | null} file - The selected File object, or null if cleared.
+ */
+async function handleFileSelected(fileType, file) {
+    console.log(`Main: handleFileSelected called for type: ${fileType}, file: ${file?.name ?? 'None'}`);
+
+    if (!file) {
+        // Handle file input clearing
+        if (fileType === 'audio') {
+            audioFileBuffer = null;
+            audioFileReady = false;
+        } else if (fileType === 'notes') {
+            notesJsonData = null;
+            notesFileReady = false;
+        }
+        ui.checkFilesLoaded(audioFileReady, notesFileReady); // Update UI button state
+        return;
+    }
+
+    // Use FileReader to process the file
+    const reader = new FileReader();
+
+    reader.onload = async (e) => {
+        try {
+            const result = e.target.result;
+            if (fileType === 'audio') {
+                audioFileBuffer = result; // result is ArrayBuffer for readAsArrayBuffer
+                audioFileReady = true;
+                console.log("Main: Audio file loaded into ArrayBuffer.");
+            } else if (fileType === 'notes') {
+                notesJsonData = JSON.parse(result); // result is text for readAsText
+                // Basic validation of notes data structure
+                if (!notesJsonData || !Array.isArray(notesJsonData.tracks) || notesJsonData.tracks.length === 0 || !Array.isArray(notesJsonData.tracks[0].notes)) {
+                    throw new Error("Invalid JSON structure: Missing 'tracks[0].notes' array or invalid format.");
+                }
+                notesFileReady = true;
+                console.log("Main: Notes file loaded and parsed.");
+            }
+            ui.setLoadingStatus("File loaded successfully.");
+        } catch (error) {
+            console.error(`Main: Error processing ${fileType} file:`, error);
+            alert(`Error processing ${fileType} file: ${error.message}`);
+            if (fileType === 'audio') { audioFileBuffer = null; audioFileReady = false; }
+            else { notesJsonData = null; notesFileReady = false; }
+            ui.setLoadingStatus(`Error loading ${fileType} file.`);
+        } finally {
+            ui.checkFilesLoaded(audioFileReady, notesFileReady); // Update UI button state
+        }
+    };
+
+    reader.onerror = () => {
+        console.error(`Main: Error reading ${fileType} file.`);
+        alert(`Error reading ${fileType} file.`);
+        if (fileType === 'audio') { audioFileBuffer = null; audioFileReady = false; }
+        else { notesJsonData = null; notesFileReady = false; }
+        ui.setLoadingStatus(`Error reading ${fileType} file.`);
+        ui.checkFilesLoaded(audioFileReady, notesFileReady); // Update UI button state
+    };
+
+    // Read the file based on type
+    if (fileType === 'audio') {
+        reader.readAsArrayBuffer(file);
+    } else if (fileType === 'notes') {
+        reader.readAsText(file);
+    }
+}
+
+// --- UI Action Callbacks ---
+// These functions are passed to ui.initUI and are called by the UI module
+// when the user interacts with UI elements.
+
+/** Callback triggered when the start button is clicked in the UI. */
+async function handleStartGame() {
+    console.log("Main: handleStartGame called (from UI).");
+    if (audioFileReady && notesFileReady && audioFileBuffer && notesJsonData) {
+        ui.setPlayButtonState('Loading', true); // Use UI function to update button
+        ui.setLoadingStatus("Starting game...");
+        ui.hideLoadingScreen();
+        ui.showGameContainer();
+        console.log("Main: Switched to game container view.");
+        // Initialize the core game modules
+        await initializeGame(audioFileBuffer, notesJsonData);
+        // Set initial play button state after initialization
+        ui.setPlayButtonState('Play', false);
+    } else {
+        console.warn("Main: Start button clicked, but files not ready.");
+        ui.checkFilesLoaded(audioFileReady, notesFileReady); // Re-check and update UI message
+    }
+}
+
+/** Callback triggered when a setting is changed in the UI overlay. */
+function handleSettingChange(settingName, value) {
+    console.log(`Main: handleSettingChange called. Setting: ${settingName}, Value: ${value}`);
+    let needsStaffRedraw = false;
+
+    switch (settingName) {
+        case 'scrollSpeed':
+            scrollSpeedPixelsPerSecond = Number(value);
+            needsStaffRedraw = true;
+            break;
+        case 'hitWindowMs':
+            hitWindowGoodMs = Number(value);
+            updateTimingWindows(); // Recalculate derived timings
+            // No redraw needed for timing window change itself
+            break;
+        case 'useColoredNotes':
+            useColoredNotes = Boolean(value);
+            needsStaffRedraw = true;
+            break;
+        case 'noDeathMode':
+            noDeathMode = Boolean(value);
+            break;
+        default:
+            console.warn(`Main: Unknown setting change received: ${settingName}`);
+            return;
+    }
+
+    // Update the settings UI immediately to reflect the change (e.g., slider value)
+    // This might be slightly redundant if the UI component updates itself, but ensures consistency.
+    ui.updateSettingsUI({
+        scrollSpeed: scrollSpeedPixelsPerSecond,
+        hitWindowMs: hitWindowGoodMs,
+        useColoredNotes: useColoredNotes,
+        noDeathMode: noDeathMode
+    });
+
+
+    // Redraw staff if needed and game is not running (to see changes immediately)
+    if (needsStaffRedraw && !gameIsRunning && staff) {
+        console.log("Main: Redrawing staff due to setting change while paused.");
+        staff.redraw();
+    }
+}
+
+/** Callback triggered when the play/pause button is clicked in the UI. */
+function handlePlayPause() {
+    console.log("Main: handlePlayPause called (from UI).");
+    if (isGameOver || !gameInitialized) {
+        console.warn("Main: Play/Pause ignored, game over or not initialized.");
+        return;
+    }
+
+    // Attempt to resume audio context first (required for user interaction)
+    audio.resumeContext().then(() => {
+        if (gameIsRunning) {
+            // Pause the game
+            audioPauseOffset = staff.pause(); // staff.pause also pauses audio module
+            ui.setPlayButtonState('Play', false); // Update button via UI module
+            gameIsRunning = false;
+            console.log(`Main: Game Paused. Audio offset: ${audioPauseOffset.toFixed(3)}`);
+        } else {
+            // Play the game (from current offset)
+            staff.play(audioPauseOffset); // staff.play also starts/resumes audio
+            ui.setPlayButtonState('Pause', false); // Update button via UI module
+            gameIsRunning = true;
+            console.log(`Main: Game Playing/Resumed from offset: ${audioPauseOffset.toFixed(3)}`);
+        }
+    }).catch(e => {
+        console.error("Main: Failed to resume AudioContext on play/pause:", e);
+        alert("Could not start audio. Please interact with the page again.");
+        ui.setPlayButtonState('Play', false); // Reset button state on error
+    });
+}
+
+/** Callback triggered when the settings button is clicked in the UI. */
+function handleOpenSettings() {
+    console.log("Main: handleOpenSettings called (from UI).");
+    if (isGameOver || !gameInitialized) {
+         console.warn("Main: Open Settings ignored, game over or not initialized.");
+         return;
+    }
+
+    // Pause the game if it's running
+    if (gameIsRunning) {
+        audioPauseOffset = staff.pause();
+        ui.setPlayButtonState('Play', false); // Update button text
+        gameIsRunning = false;
+        console.log("Main: Game paused to open settings. Offset: " + audioPauseOffset.toFixed(3));
+    }
+
+    // Update the settings display with current values
+    ui.updateSettingsUI({
+        scrollSpeed: scrollSpeedPixelsPerSecond,
+        hitWindowMs: hitWindowGoodMs,
+        useColoredNotes: useColoredNotes,
+        noDeathMode: noDeathMode
+    });
+
+    // Show the overlay
+    ui.showSettingsOverlay();
+}
+
+/** Callback triggered when the close settings button is clicked in the UI. */
+function handleCloseSettings() {
+    console.log("Main: handleCloseSettings called (from UI).");
+    // Hiding the overlay is handled directly in ui.js listener
+
+    // Redraw staff if the game is paused to reflect any changes made
+    if (!gameIsRunning && staff && gameInitialized) {
+        console.log("Main: Redrawing staff after closing settings while paused.");
+        staff.redraw();
+    }
+}
+
+/** Callback triggered when the restart button is clicked in the UI. */
+function handleRestart() {
+    console.log("Main: handleRestart called (from UI).");
+    if (!gameInitialized) {
+        console.warn("Main: Restart ignored, game not initialized.");
+        return;
+    }
+
+    // 1. Package current state (mostly for gameLogic to reset)
+    const currentLogicGameState = {
+        playerHealth, comboCount, totalScore, perfectCount, goodCount, missCount, maxCombo,
+        isGameOver, gameIsRunning, audioPauseOffset
+        // noDeathMode is a setting, typically not reset by restart
+    };
+
+    // 2. References to modules needed by gameLogic.restartGame
+    const modules = { audio, staff };
+
+    // 3. Define UI access functions for gameLogic.restartGame
+    //    These functions call the actual ui module functions.
+    const uiAccessForLogic = {
+        hideScoreOverlay: ui.hideScoreOverlay,
+        setPlayButtonState: ui.setPlayButtonState,
+        setSettingsButtonState: ui.setSettingsButtonState,
+        // This function will be called by gameLogic AFTER it resets its state,
+        // so we use the state variables from *this* scope (main.js) which will be updated shortly.
+        updateInfoUI: () => {
+            console.log("Main (handleRestart -> uiAccessForLogic.updateInfoUI): Calling ui.updateInfoUI after reset.");
+            ui.updateInfoUI(playerHealth, gameLogic.MAX_HEALTH, comboCount);
+        }
+    };
+
+    // 4. Call the centralized restart logic
+    gameLogic.restartGame(currentLogicGameState, modules, uiAccessForLogic);
+
+    // 5. Update main.js state from the (potentially mutated) currentLogicGameState object
+    //    Note: gameLogic.restartGame primarily resets the state *within* the object,
+    //    so we re-assign main.js variables from the reset object.
+    playerHealth = currentLogicGameState.playerHealth;
+    comboCount = currentLogicGameState.comboCount;
+    totalScore = currentLogicGameState.totalScore;
+    perfectCount = currentLogicGameState.perfectCount;
+    goodCount = currentLogicGameState.goodCount;
+    missCount = currentLogicGameState.missCount;
+    maxCombo = currentLogicGameState.maxCombo;
+    isGameOver = currentLogicGameState.isGameOver;
+    gameIsRunning = currentLogicGameState.gameIsRunning;
+    audioPauseOffset = currentLogicGameState.audioPauseOffset;
+
+    // 6. Explicitly update UI info again here, AFTER main.js state is updated.
+    //    This ensures the UI reflects the final reset state managed by main.js.
+    console.log("Main (handleRestart): Updating UI info after state reset.");
+    ui.updateInfoUI(playerHealth, gameLogic.MAX_HEALTH, comboCount);
+
+    console.log("Main: Game state reset via gameLogic.restartGame. Health:", playerHealth);
+}
 
 
 // --- Bridge Functions to Game Logic ---
 
 /**
  * Bridge function called by staffModule when a note is judged.
- * It gathers current state, calls gameLogic.applyScore, and updates main.js state.
+ * It gathers current state, calls gameLogic.applyScore, updates main.js state,
+ * and triggers UI updates via the ui module.
  * @param {string} hitType - The type of hit: 'perfect', 'good', or 'miss'.
+ * @export // Exported for staffModule to call
  */
 export function applyScore(hitType) {
     // console.log(`Main (applyScore bridge): Received hitType: ${hitType}`);
@@ -93,21 +364,24 @@ export function applyScore(hitType) {
         missCount: missCount,
         maxCombo: maxCombo,
         totalScore: totalScore,
-        isGameOver: isGameOver, // Pass main.js's isGameOver state
-        noDeathMode: noDeathMode  // Pass main.js's noDeathMode setting
+        isGameOver: isGameOver,
+        noDeathMode: noDeathMode
     };
 
     // Define callbacks that gameLogic can use to trigger actions back in main.js
     const logicCallbacks = {
         triggerGameOverCallback: triggerGameOverInternal, // Pass the internal handler
-        updateUICallback: updateInfoUI // Pass UI update function
+        // Pass a function that calls the ui module's update function with current main.js state
+        updateUICallback: () => {
+            // console.log("Main (applyScore bridge -> updateUICallback): Calling ui.updateInfoUI.");
+            ui.updateInfoUI(playerHealth, gameLogic.MAX_HEALTH, comboCount);
+        }
     };
 
     // Call the actual scoring logic in gameLogic.js
-    // gameLogic.applyScore will mutate the currentLogicGameState object.
     gameLogic.applyScore(hitType, currentLogicGameState, logicCallbacks);
 
-    // Update main.js's state variables from the (potentially) mutated currentLogicGameState object
+    // Update main.js's state variables from the mutated currentLogicGameState object
     playerHealth = currentLogicGameState.playerHealth;
     comboCount = currentLogicGameState.comboCount;
     perfectCount = currentLogicGameState.perfectCount;
@@ -115,182 +389,97 @@ export function applyScore(hitType) {
     missCount = currentLogicGameState.missCount;
     maxCombo = currentLogicGameState.maxCombo;
     totalScore = currentLogicGameState.totalScore;
-    // isGameOver is set by triggerGameOverInternal, so no need to re-assign from currentLogicGameState.isGameOver here.
-    // noDeathMode is a setting, not changed by applyScore logic.
+    // isGameOver is set by triggerGameOverInternal
 
+    // Note: UI update is handled by the updateUICallback passed to gameLogic.applyScore
     // console.log(`Main (applyScore bridge): State after gameLogic call - Health: ${playerHealth}, Combo: ${comboCount}`);
 }
 
 /**
- * Internal handler for game over conditions.
+ * Internal handler for game over conditions (health depletion or song end).
  * Called by gameLogic.applyScore (via callback) or by handleSongEnd.
- * This function then calls gameLogic.triggerGameOver.
+ * This function then calls gameLogic.triggerGameOver to stop modules and
+ * finally calls the ui module to display the score screen.
  * @param {boolean} songFinished - True if the song completed naturally.
  */
 function triggerGameOverInternal(songFinished) {
     console.log(`Main (triggerGameOverInternal): Called with songFinished: ${songFinished}. Current isGameOver: ${isGameOver}`);
-    if (isGameOver) { // Prevent re-triggering if already over
+    if (isGameOver) { // Prevent re-triggering
         console.warn("Main (triggerGameOverInternal): Already game over. Ignoring.");
         return;
     }
 
-    // Package current state and module/UI references for gameLogic
+    // 1. Package current state for gameLogic.triggerGameOver
     const currentLogicGameState = {
-        isGameOver: isGameOver,     // Pass current state
-        gameIsRunning: gameIsRunning // Pass current state
+        isGameOver: isGameOver,
+        gameIsRunning: gameIsRunning
     };
+
+    // 2. References to modules needed by gameLogic.triggerGameOver
     const modules = { audio, staff };
-    const uiAccess = { playPauseButton, settingsButton, showScoreScreen };
 
-    // Call the centralized game over logic in gameLogic.js
-    // gameLogic.triggerGameOver will mutate currentLogicGameState.
-    gameLogic.triggerGameOver(songFinished, currentLogicGameState, modules, uiAccess);
+    // 3. Define UI access functions for gameLogic.triggerGameOver
+    //    These functions call the actual ui module functions.
+    const uiAccessForLogic = {
+        setPlayButtonState: ui.setPlayButtonState,
+        setSettingsButtonState: ui.setSettingsButtonState,
+        // showScoreScreen is called *after* gameLogic.triggerGameOver finishes
+    };
 
-    // Update main.js state from the mutated currentLogicGameState object
+    // 4. Call the centralized game over logic to stop audio/staff etc.
+    gameLogic.triggerGameOver(songFinished, currentLogicGameState, modules, uiAccessForLogic);
+
+    // 5. Update main.js state from the mutated currentLogicGameState object
     isGameOver = currentLogicGameState.isGameOver;
     gameIsRunning = currentLogicGameState.gameIsRunning;
 
-    console.log(`Main (triggerGameOverInternal): State after gameLogic call - isGameOver: ${isGameOver}, gameIsRunning: ${gameIsRunning}`);
+    // 6. Prepare stats and show the score screen using the UI module
+    console.log("Main (triggerGameOverInternal): Preparing stats for score screen.");
+    const scoreStats = {
+        perfectCount: perfectCount,
+        goodCount: goodCount,
+        missCount: missCount,
+        maxCombo: maxCombo,
+        totalScore: totalScore,
+        totalNotesInSong: totalNotesInSong
+    };
+    ui.showScoreScreen(scoreStats); // Use UI module function
+
+    console.log(`Main (triggerGameOverInternal): State after gameLogic call - isGameOver: ${isGameOver}, gameIsRunning: ${gameIsRunning}. Score screen shown.`);
 }
 
 /**
  * Handles the song ending naturally (callback from audioModule).
+ * Triggers the game over sequence indicating the song was finished.
  */
 function handleSongEnd() {
     console.log("Main (handleSongEnd): Song ended naturally (callback from audioModule).");
-    if (!isGameOver) { // Only trigger game over if not already over
+    if (!isGameOver) { // Only trigger if not already over
         triggerGameOverInternal(true); // True indicates song finished naturally
-    }
-}
-// --- End of Bridge Funtions Section
-
-// --- UI Section ---
-
-/** Updates the health bar and combo display on the UI. */
-function updateInfoUI() {
-    // console.log("Main (updateInfoUI): Updating health and combo display.");
-    if (comboCountSpan) {
-        comboCountSpan.textContent = comboCount;
-    }
-    if (healthBarElement) {
-        const healthPercentage = Math.max(0, Math.min(100, (playerHealth / gameLogic.MAX_HEALTH) * 100));
-        healthBarElement.style.width = `${healthPercentage}%`;
-
-        if (healthPercentage <= 0) {
-            healthBarElement.style.backgroundColor = '#555555';
-        } else if (healthPercentage < 25) {
-            healthBarElement.style.backgroundColor = '#f44336';
-        } else if (healthPercentage < 50) {
-            healthBarElement.style.backgroundColor = '#ff9800';
-        } else {
-            healthBarElement.style.backgroundColor = '#4CAF50';
-        }
-    }
-}
-
-/** Updates the displayed values in the settings panel based on current state. */
-function updateSettingsUI() {
-    console.log("Main (updateSettingsUI): Updating settings panel UI values.");
-    updateTimingWindows(); // Recalculate derived timing windows first
-
-    if (staffScaleValueSpan) staffScaleValueSpan.textContent = scrollSpeedPixelsPerSecond;
-    if (hitWindowValueSpan) hitWindowValueSpan.textContent = hitWindowGoodMs;
-    if (colorToggleSwitch) colorToggleSwitch.checked = useColoredNotes;
-    if (noDeathToggleSwitch) noDeathToggleSwitch.checked = noDeathMode;
-    console.log("Main (updateSettingsUI): Settings UI update complete.");
-}
-
-/** Calculates and displays the final score screen. */
-function showScoreScreen() {
-    console.log("Main (showScoreScreen): Preparing and displaying score screen.");
-    if (!scoreOverlay) {
-        console.error("Main (showScoreScreen): Score overlay element not found!");
-        return;
-    }
-
-    const processedNotes = perfectCount + goodCount + missCount;
-    const totalNotesForPercentage = totalNotesInSong > 0 ? totalNotesInSong : processedNotes;
-    console.log(`Main (showScoreScreen): totalNotesInSong: ${totalNotesInSong}, processedNotes: ${processedNotes}, totalNotesForPercentage: ${totalNotesForPercentage}`);
-
-    const perfectPercentVal = totalNotesForPercentage > 0 ? ((perfectCount / totalNotesForPercentage) * 100).toFixed(1) : "0.0";
-    const goodPercentVal = totalNotesForPercentage > 0 ? ((goodCount / totalNotesForPercentage) * 100).toFixed(1) : "0.0";
-    const missPercentVal = totalNotesForPercentage > 0 ? ((missCount / totalNotesForPercentage) * 100).toFixed(1) : "0.0";
-
-    if(scorePerfectCount) scorePerfectCount.textContent = perfectCount;
-    if(scorePerfectPercent) scorePerfectPercent.textContent = perfectPercentVal;
-    if(scoreGoodCount) scoreGoodCount.textContent = goodCount;
-    if(scoreGoodPercent) scoreGoodPercent.textContent = goodPercentVal;
-    if(scoreMissCount) scoreMissCount.textContent = missCount;
-    if(scoreMissPercent) scoreMissPercent.textContent = missPercentVal;
-    if(scoreMaxCombo) scoreMaxCombo.textContent = maxCombo;
-    if(scoreTotalScore) scoreTotalScore.textContent = totalScore;
-
-    scoreOverlay.classList.add('visible');
-    console.log("Main (showScoreScreen): Score screen displayed.");
-}
-
-/** Handles layout adjustments on orientation change or resize. */
-function handleLayoutChange() {
-    console.log("Main (handleLayoutChange): Adjusting layout for orientation/resize.");
-    if (!gameContainer || !infoSection || !staffSection || !bottomPanel || !keyboardSection) {
-        console.error("Main (handleLayoutChange): Essential layout containers not found.");
-        return;
-    }
-
-    const isLandscape = window.matchMedia("(orientation: landscape)").matches;
-    console.log(`Main (handleLayoutChange): Detected orientation: ${isLandscape ? 'landscape' : 'portrait'}`);
-
-    if (isLandscape) {
-        if (infoSection.parentElement !== bottomPanel) {
-            bottomPanel.insertBefore(infoSection, keyboardSection);
-        }
     } else {
-        if (infoSection.parentElement === bottomPanel) {
-            gameContainer.insertBefore(infoSection, staffSection);
-        }
+        console.log("Main (handleSongEnd): Game was already over when song end callback received.");
     }
-
-    if (staff && typeof staff.handleResize === 'function') {
-        setTimeout(() => {
-            staff.handleResize();
-        }, 50);
-    } else {
-        console.warn("Main (handleLayoutChange): staff.handleResize function not available.");
-    }
-    console.log("Main (handleLayoutChange): Layout adjustment attempt complete.");
 }
-
-/**
- * Recalculates derived timing window variables. Exported for potential external use if needed,
- * and used by staffModule (which imports the derived sec/ms variables directly).
- */
-export function updateTimingWindows() {
-    hitWindowPerfectMs = Math.floor(hitWindowGoodMs / 2);
-    hitWindowGoodSec = hitWindowGoodMs / 1000.0;
-    hitWindowPerfectSec = hitWindowPerfectMs / 1000.0;
-    console.log(`Main (updateTimingWindows): Good=${hitWindowGoodMs}ms (${hitWindowGoodSec.toFixed(3)}s), Perfect=${hitWindowPerfectMs}ms (${hitWindowPerfectSec.toFixed(3)}s)`);
-}
-// --- End of UI section
-
 
 // --- Game Initialization Section ---
 
 /**
- * Initializes all game modules and sets up event listeners
+ * Initializes all core game modules (audio, staff, keyboard)
  * AFTER audio and notes files have been successfully loaded and parsed.
- * @param {ArrayBuffer} loadedAudioBuffer - The decoded audio data.
+ * @param {ArrayBuffer} loadedAudioBuffer - The decoded audio data buffer.
  * @param {object} loadedNoteData - The parsed JSON object containing note map data.
  */
 async function initializeGame(loadedAudioBuffer, loadedNoteData) {
-    console.log("Main (initializeGame): Attempting to initialize game.");
+    console.log("Main (initializeGame): Attempting to initialize core game modules.");
     if (gameInitialized) {
         console.warn("Main (initializeGame): Game already initialized. Skipping.");
         return;
     }
-    console.log("--- Main: Initializing Keytap Game ---");
+    console.log("--- Main: Initializing Keytap Game Modules ---");
 
-    if(loadingStatus) loadingStatus.textContent = "Initializing audio...";
+    ui.setLoadingStatus("Initializing audio...");
 
+    // Calculate total notes (used for score screen percentages)
     totalNotesInSong = loadedNoteData?.tracks?.[0]?.notes?.length || 0;
     console.log(`Main (initializeGame): Total notes in song calculated: ${totalNotesInSong}`);
 
@@ -300,19 +489,27 @@ async function initializeGame(loadedAudioBuffer, loadedNoteData) {
     const audioInitialized = await audio.init(loadedAudioBuffer, handleSongEnd);
     if (!audioInitialized) {
         console.error("Main (initializeGame): Audio module initialization failed.");
-        if(loadingStatus) loadingStatus.textContent = "Error: Failed to decode audio.";
-        if(startButton) startButton.disabled = false;
+        ui.setLoadingStatus("Error: Failed to decode audio.");
+        ui.setPlayButtonState('Play', true); // Re-enable play button? Or show error state?
+        // Consider resetting file state and showing loading screen again
+        audioFileReady = false;
+        notesFileReady = false; // Reset both?
+        ui.checkFilesLoaded(audioFileReady, notesFileReady);
+        ui.hideGameContainer();
+        ui.showLoadingScreen();
         return;
     }
     console.log("Main (initializeGame): Audio Module initialized successfully.");
 
-    if(loadingStatus) loadingStatus.textContent = "Initializing visuals...";
+    ui.setLoadingStatus("Initializing visuals...");
 
     // 2. Initialize Staff Module
     console.log("Main (initializeGame): Initializing Staff Module...");
     const staffInitialized = staff.init({
         noteDataJson: loadedNoteData,
-        staffSectionElement: staffSection,
+        // Pass the actual staffSection DOM element (needed for canvas size calculation)
+        staffSectionElement: document.getElementById('staffSection'), // Assuming ID is stable
+        // Provide a callback function for staffModule to update main.js's offset
         setAudioPauseOffset: (newOffset) => {
             audioPauseOffset = newOffset;
             console.log(`Main (initializeGame - staffCallback): audioPauseOffset updated to ${audioPauseOffset.toFixed(3)} by staffModule.`);
@@ -320,7 +517,13 @@ async function initializeGame(loadedAudioBuffer, loadedNoteData) {
     });
     if (!staffInitialized) {
         console.error("Main (initializeGame): Staff module initialization failed.");
-        if(loadingStatus) loadingStatus.textContent = "Error: Failed to process notes file.";
+        ui.setLoadingStatus("Error: Failed to process notes file.");
+         // Consider resetting and going back to loading screen
+        audioFileReady = false;
+        notesFileReady = false;
+        ui.checkFilesLoaded(audioFileReady, notesFileReady);
+        ui.hideGameContainer();
+        ui.showLoadingScreen();
         return;
     }
     console.log("Main (initializeGame): Staff Module initialized successfully.");
@@ -328,278 +531,19 @@ async function initializeGame(loadedAudioBuffer, loadedNoteData) {
     // 3. Initialize Keyboard Module
     console.log("Main (initializeGame): Initializing Keyboard Module...");
     initKeyboard({
-        judgeKeyPressFunc: staff.judgeKeyPress,
-        isGameOverFunc: () => isGameOver,       // Provide a function to get current isGameOver state
-        isGameRunningFunc: () => gameIsRunning, // Provide a function to get current gameIsRunning state
+        judgeKeyPressFunc: staff.judgeKeyPress, // Pass staff's judge function
+        isGameOverFunc: () => isGameOver,       // Provide function to get current game over state
+        isGameRunningFunc: () => gameIsRunning, // Provide function to get current running state
     });
     console.log("Main (initializeGame): Keyboard Module initialized successfully.");
 
-    // 4. Set initial UI states
-    updateInfoUI();
-    updateSettingsUI(); // Also calls updateTimingWindows
-
-    // 5. Set initial layout
-    handleLayoutChange();
-
-    // 6. Add Global Event Listeners
-    setupGlobalEventListeners();
+    // 4. Initial UI state updates (health/combo)
+    ui.updateInfoUI(playerHealth, gameLogic.MAX_HEALTH, comboCount);
 
     gameInitialized = true;
-    console.log("--- Main: Keytap Game Initialization Complete ---");
-    if(loadingStatus) loadingStatus.textContent = "Ready!";
-}
-
-/** Sets up global event listeners for buttons, settings, orientation changes, etc. */
-function setupGlobalEventListeners() {
-    console.log("Main (setupGlobalEventListeners): Setting up...");
-
-    // Play/Pause Button
-    if (playPauseButton && staff && audio) {
-        playPauseButton.addEventListener('click', () => {
-            console.log("Main: Play/Pause button clicked.");
-            if (isGameOver) return;
-
-            audio.resumeContext().then(() => {
-                if (gameIsRunning) {
-                    audioPauseOffset = staff.pause(); // staff.pause also pauses audio
-                    playPauseButton.textContent = "Play";
-                    gameIsRunning = false;
-                    console.log(`Main: Game Paused. Audio offset: ${audioPauseOffset.toFixed(3)}`);
-                } else {
-                    staff.play(audioPauseOffset); // staff.play also starts/resumes audio
-                    playPauseButton.textContent = "Pause";
-                    gameIsRunning = true;
-                    console.log(`Main: Game Playing/Resumed from offset: ${audioPauseOffset.toFixed(3)}`);
-                }
-            }).catch(e => console.error("Main: Failed to resume AudioContext on play/pause:", e));
-        });
-    } else {
-        console.warn("Main (setupGlobalEventListeners): Play/Pause button or modules not found.");
-    }
-
-    // Settings Button
-    if (settingsButton && settingsOverlay && staff && audio) {
-        settingsButton.addEventListener('click', () => {
-            console.log("Main: Settings button clicked.");
-            if (isGameOver) return;
-            if (gameIsRunning) {
-                audioPauseOffset = staff.pause();
-                if(playPauseButton) playPauseButton.textContent = "Play";
-                gameIsRunning = false;
-                console.log("Main: Game paused for settings. Offset: " + audioPauseOffset.toFixed(3));
-            }
-            updateSettingsUI();
-            settingsOverlay.classList.add('visible');
-        });
-    } else {
-        console.warn("Main (setupGlobalEventListeners): Settings button/overlay or modules not found.");
-    }
-
-    // Close Settings Button
-    if (closeSettingsButton && settingsOverlay) {
-        closeSettingsButton.addEventListener('click', () => {
-            settingsOverlay.classList.remove('visible');
-            console.log("Main: Settings overlay closed.");
-            if (!gameIsRunning && staff) staff.redraw();
-        });
-    } else {
-        console.warn("Main (setupGlobalEventListeners): Close Settings button or overlay not found.");
-    }
-
-     // Settings: Color Toggle Switch
-     if (colorToggleSwitch && staff) {
-         colorToggleSwitch.addEventListener('change', (event) => {
-             useColoredNotes = event.target.checked;
-             console.log(`Main: Color notes setting changed to: ${useColoredNotes}`);
-             if (staff) staff.redraw();
-         });
-     } else {
-         console.warn("Main (setupGlobalEventListeners): Color toggle or staff module not found.");
-     }
-
-     // Settings: No Death Mode Toggle Switch
-     if (noDeathToggleSwitch) {
-         noDeathToggleSwitch.addEventListener('change', (event) => {
-             noDeathMode = event.target.checked;
-             console.log(`Main: No Death Mode setting changed to: ${noDeathMode}`);
-         });
-     } else {
-         console.warn("Main (setupGlobalEventListeners): No Death Mode toggle not found.");
-     }
-
-     // Settings: Staff Scale Adjustment
-     const STAFF_SCALE_STEP = 10, STAFF_SCALE_MIN = 50, STAFF_SCALE_MAX = 200;
-     if (staffScaleDownButton && staffScaleUpButton && staff) {
-         staffScaleDownButton.addEventListener('click', () => {
-             scrollSpeedPixelsPerSecond = Math.max(STAFF_SCALE_MIN, scrollSpeedPixelsPerSecond - STAFF_SCALE_STEP);
-             updateSettingsUI(); if (staff) staff.redraw();
-             console.log(`Main: Staff scale decreased to: ${scrollSpeedPixelsPerSecond}`);
-         });
-         staffScaleUpButton.addEventListener('click', () => {
-             scrollSpeedPixelsPerSecond = Math.min(STAFF_SCALE_MAX, scrollSpeedPixelsPerSecond + STAFF_SCALE_STEP);
-             updateSettingsUI(); if (staff) staff.redraw();
-             console.log(`Main: Staff scale increased to: ${scrollSpeedPixelsPerSecond}`);
-         });
-     } else {
-         console.warn("Main (setupGlobalEventListeners): Staff scale buttons or staff module not found.");
-     }
-
-     // Settings: Hit Window Adjustment
-     const HIT_WINDOW_STEP = 5, HIT_WINDOW_MIN = 30, HIT_WINDOW_MAX = 200;
-     if (hitWindowDownButton && hitWindowUpButton) {
-         hitWindowDownButton.addEventListener('click', () => {
-             hitWindowGoodMs = Math.max(HIT_WINDOW_MIN, hitWindowGoodMs - HIT_WINDOW_STEP);
-             updateSettingsUI(); // This calls updateTimingWindows()
-             console.log(`Main: Hit window decreased to: ${hitWindowGoodMs}ms`);
-         });
-         hitWindowUpButton.addEventListener('click', () => {
-             hitWindowGoodMs = Math.min(HIT_WINDOW_MAX, hitWindowGoodMs + HIT_WINDOW_STEP);
-             updateSettingsUI();
-             console.log(`Main: Hit window increased to: ${hitWindowGoodMs}ms`);
-         });
-     } else {
-         console.warn("Main (setupGlobalEventListeners): Hit window buttons not found.");
-     }
-
-     // Score Screen: Restart Button
-    if (restartButton) {
-        restartButton.addEventListener('click', () => {
-            console.log("Main: Restart button clicked.");
-            // Package current state, modules, and UI access for gameLogic.restartGame
-            const currentLogicGameState = {
-                playerHealth, comboCount, totalScore, perfectCount, goodCount, missCount, maxCombo,
-                isGameOver, gameIsRunning, audioPauseOffset
-                // noDeathMode is a setting, typically not reset by restart, but can be included if needed
-            };
-            const modules = { audio, staff };
-            // Pass main.js's updateInfoUI directly. gameLogic.restartGame will call it.
-            // However, ensure main.js's state is updated *before* its own updateInfoUI is most effective.
-            const uiAccess = {
-                scoreOverlay,
-                playPauseButton,
-                settingsButton,
-                updateInfoUI // gameLogic will call this with the state *it* knows.
-            };
-
-            gameLogic.restartGame(currentLogicGameState, modules, uiAccess);
-
-            // Update main.js state from the mutated currentLogicGameState object
-            playerHealth = currentLogicGameState.playerHealth;
-            comboCount = currentLogicGameState.comboCount;
-            totalScore = currentLogicGameState.totalScore;
-            perfectCount = currentLogicGameState.perfectCount;
-            goodCount = currentLogicGameState.goodCount;
-            missCount = currentLogicGameState.missCount;
-            maxCombo = currentLogicGameState.maxCombo;
-            isGameOver = currentLogicGameState.isGameOver;
-            gameIsRunning = currentLogicGameState.gameIsRunning;
-            audioPauseOffset = currentLogicGameState.audioPauseOffset;
-
-            // Explicitly call updateInfoUI() AGAIN here in main.js,
-            // AFTER main.js's own state variables have been updated.
-            // This ensures the UI reflects the truly reset state managed by main.js.
-            updateInfoUI();
-            console.log("Main: Game state reset via gameLogic.restartGame and UI updated. Health:", playerHealth);
-        });
-        console.log("Main (setupGlobalEventListeners): Restart button listener attached.");
-    } else {
-        console.warn("Main (setupGlobalEventListeners): Restart button not found.");
-    }
-
-
-    // Orientation Change Listener
-    const mediaQueryList = window.matchMedia("(orientation: landscape)");
-    mediaQueryList.addEventListener("change", handleLayoutChange);
-
-    // Window Resize Listener (Debounced)
-    let resizeTimeout;
-    window.addEventListener('resize', () => {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-            console.log("Main: Executing debounced resize handling.");
-            handleLayoutChange();
-        }, 150);
-    });
-    console.log("Main (setupGlobalEventListeners): Listeners attached.");
-}
-
-
-// --- File Loading Logic ---
-console.log("Main: Defining file loading logic.");
-
-/** Checks if both audio and notes files are loaded and updates the start button state. */
-function checkFilesLoaded() {
-    if (!startButton) return;
-    if (audioFileLoaded && notesFileLoaded) {
-        if(loadingStatus) loadingStatus.textContent = "Files loaded. Ready to start!";
-        startButton.disabled = false;
-    } else {
-        startButton.disabled = true;
-        if (!loadingStatus) return;
-        if (!audioFileLoaded && !notesFileLoaded) loadingStatus.textContent = "Please select both files.";
-        else if (!audioFileLoaded) loadingStatus.textContent = "Please select an MP3 audio file.";
-        else loadingStatus.textContent = "Please select a JSON notes file.";
-    }
-}
-
-/** Handles audio file selection. */
-function handleAudioFileSelect(event) {
-    const file = event.target.files[0];
-    if (!file) {
-        audioFileLoaded = false; audioFileBuffer = null; checkFilesLoaded(); return;
-    }
-    console.log(`Main: Selected audio: ${file.name}`);
-    if (!file.type.startsWith('audio/mpeg') && !file.name.toLowerCase().endsWith('.mp3')) {
-        alert("Invalid audio file type. Please select an MP3 file.");
-        event.target.value = ''; audioFileLoaded = false; audioFileBuffer = null; checkFilesLoaded(); return;
-    }
-    if (loadingStatus) loadingStatus.textContent = "Loading audio...";
-    if (startButton) startButton.disabled = true;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        audioFileBuffer = e.target.result; audioFileLoaded = true;
-        console.log("Main: Audio file loaded into ArrayBuffer.");
-        checkFilesLoaded();
-    };
-    reader.onerror = () => {
-        alert("Error reading audio file."); audioFileLoaded = false; audioFileBuffer = null;
-        if (loadingStatus) loadingStatus.textContent = "Error loading audio."; checkFilesLoaded();
-    };
-    reader.readAsArrayBuffer(file);
-}
-
-/** Handles notes file selection. */
-function handleNotesFileSelect(event) {
-    const file = event.target.files[0];
-    if (!file) {
-        notesFileLoaded = false; notesJsonData = null; checkFilesLoaded(); return;
-    }
-    console.log(`Main: Selected notes: ${file.name}`);
-    if (!file.type.startsWith('application/json') && !file.name.toLowerCase().endsWith('.json')) {
-        alert("Invalid notes file type. Please select a JSON file.");
-        event.target.value = ''; notesFileLoaded = false; notesJsonData = null; checkFilesLoaded(); return;
-    }
-    if (loadingStatus) loadingStatus.textContent = "Loading notes...";
-    if (startButton) startButton.disabled = true;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            notesJsonData = JSON.parse(e.target.result);
-            if (!notesJsonData || !Array.isArray(notesJsonData.tracks) || notesJsonData.tracks.length === 0) {
-                throw new Error("Invalid JSON structure: Missing 'tracks' array or empty.");
-            }
-            notesFileLoaded = true; console.log("Main: Notes file loaded and parsed.");
-            checkFilesLoaded();
-        } catch (error) {
-            alert(`Error parsing JSON: ${error.message}.`); notesFileLoaded = false; notesJsonData = null;
-            if (loadingStatus) loadingStatus.textContent = "Error parsing notes JSON."; checkFilesLoaded();
-        }
-    };
-    reader.onerror = () => {
-        alert("Error reading notes file."); notesFileLoaded = false; notesJsonData = null;
-        if (loadingStatus) loadingStatus.textContent = "Error loading notes file."; checkFilesLoaded();
-    };
-    reader.readAsText(file);
+    console.log("--- Main: Keytap Game Modules Initialization Complete ---");
+    ui.setLoadingStatus("Ready!"); // Update status via UI module
+    // Play button state is handled after initialization finishes
 }
 
 
@@ -607,72 +551,35 @@ function handleNotesFileSelect(event) {
 window.addEventListener('load', () => {
     console.log("Main: Window 'load' event. Setting up main script.");
 
-    // Assign Global DOM Elements
-    loadingScreen = document.getElementById('loadingScreen');
-    audioFileInput = document.getElementById('audioFile');
-    notesFileInput = document.getElementById('notesFile');
-    loadingStatus = document.getElementById('loadingStatus');
-    startButton = document.getElementById('startButton');
-    gameContainer = document.getElementById('gameContainer');
-    infoSection = document.getElementById('infoSection');
-    staffSection = document.getElementById('staffSection');
-    bottomPanel = document.getElementById('bottomPanel');
-    keyboardSection = document.getElementById('keyboardSection');
-    playPauseButton = document.getElementById('playPauseButton');
-    settingsButton = document.getElementById('settingsButton');
-    comboCountSpan = document.getElementById('comboCount');
-    healthBarElement = document.getElementById('healthBar');
-    settingsOverlay = document.getElementById('settingsOverlay');
-    colorToggleSwitch = document.getElementById('colorToggleSwitch');
-    noDeathToggleSwitch = document.getElementById('noDeathToggleSwitch');
-    closeSettingsButton = document.getElementById('closeSettingsButton');
-    staffScaleValueSpan = document.getElementById('staffScaleValue');
-    staffScaleDownButton = document.getElementById('staffScaleDown');
-    staffScaleUpButton = document.getElementById('staffScaleUp');
-    hitWindowValueSpan = document.getElementById('hitWindowValue');
-    hitWindowDownButton = document.getElementById('hitWindowDown');
-    hitWindowUpButton = document.getElementById('hitWindowUp');
-    scoreOverlay = document.getElementById('scoreOverlay');
-    scorePerfectCount = document.getElementById('scorePerfectCount');
-    scorePerfectPercent = document.getElementById('scorePerfectPercent');
-    scoreGoodCount = document.getElementById('scoreGoodCount');
-    scoreGoodPercent = document.getElementById('scoreGoodPercent');
-    scoreMissCount = document.getElementById('scoreMissCount');
-    scoreMissPercent = document.getElementById('scoreMissPercent');
-    scoreMaxCombo = document.getElementById('scoreMaxCombo');
-    scoreTotalScore = document.getElementById('scoreTotalScore');
-    restartButton = document.getElementById('restartButton');
-    console.log("Main: DOM elements assigned.");
+    // Define callbacks for the UI module
+    const uiCallbacks = {
+        onStartGame: handleStartGame,
+        onSettingChange: handleSettingChange,
+        onRestart: handleRestart,
+        onFileSelected: handleFileSelected,
+        onPlayPause: handlePlayPause,
+        onOpenSettings: handleOpenSettings,
+        onCloseSettings: handleCloseSettings,
+    };
 
-    if (!loadingScreen || !startButton || !gameContainer || !audioFileInput || !notesFileInput || !loadingStatus) {
-        console.error("CRITICAL ERROR: Essential UI elements for startup are missing!");
-        alert("Error: Could not initialize game interface. Key elements missing.");
-        return;
-    }
+    // Define initial state for the UI module
+    const initialState = {
+        scrollSpeed: scrollSpeedPixelsPerSecond,
+        hitWindowMs: hitWindowGoodMs,
+        useColoredNotes: useColoredNotes,
+        noDeathMode: noDeathMode,
+        initialHealth: playerHealth, // Use the initialized value
+        maxHealth: gameLogic.MAX_HEALTH, // Use the constant
+    };
 
-    // Attach file input listeners
-    if (audioFileInput) audioFileInput.addEventListener('change', handleAudioFileSelect);
-    if (notesFileInput) notesFileInput.addEventListener('change', handleNotesFileSelect);
+    // Initialize the UI module
+    // This also handles initial layout and file check display
+    ui.initUI(uiCallbacks, initialState);
 
-    // Attach start button listener
-    startButton.addEventListener('click', async () => {
-        console.log("Main: Start button clicked.");
-        if (audioFileLoaded && notesFileLoaded && audioFileBuffer && notesJsonData) {
-            startButton.disabled = true;
-            if(loadingStatus) loadingStatus.textContent = "Starting game...";
-            loadingScreen.classList.add('hidden');
-            gameContainer.classList.add('visible');
-            console.log("Main: Switched to game container.");
-            await initializeGame(audioFileBuffer, notesJsonData);
-        } else {
-            console.warn("Main: Start button clicked, but files not ready.");
-            checkFilesLoaded();
-        }
-    });
+    // Initialize derived timing windows based on default hitWindowGoodMs
+    updateTimingWindows();
 
-    updateTimingWindows(); // Initialize derived timing windows
-    checkFilesLoaded();    // Set initial state of start button
-    console.log("Main: Setup complete. Waiting for file selection.");
+    console.log("Main: Setup complete. UI Initialized. Waiting for file selection via UI.");
 });
 
 console.log("--- main.js finished synchronous execution ---");
