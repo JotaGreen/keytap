@@ -94,6 +94,7 @@ export function applyScore(hitType, gameState, callbacks) {
 
     console.log(`GameLogic (applyScore): Event: ${hitType.toUpperCase()} | Combo: ${gameState.comboCount} (Max: ${gameState.maxCombo}) | Bonus: ${comboBonus} | Health Change: ${actualHealthChange} (Raw Energy: ${totalEnergyChange}) | Health: ${gameState.playerHealth}/${MAX_HEALTH} | Score: ${gameState.totalScore} | P:${gameState.perfectCount} G:${gameState.goodCount} M:${gameState.missCount}`);
 
+    // Call the UI update callback provided by main.js
     if (callbacks && typeof callbacks.updateUICallback === 'function') {
         callbacks.updateUICallback(); // Update the UI elements (health bar, combo display)
     } else {
@@ -105,6 +106,7 @@ export function applyScore(hitType, gameState, callbacks) {
     if (gameState.playerHealth <= MIN_HEALTH && !gameState.isGameOver) {
         if (!gameState.noDeathMode) {
             console.log("GameLogic (applyScore): Health reached zero. Triggering Game Over.");
+            // Call the game over trigger callback provided by main.js
             if (callbacks && typeof callbacks.triggerGameOverCallback === 'function') {
                 callbacks.triggerGameOverCallback(false); // Song did not finish naturally
             } else {
@@ -118,15 +120,16 @@ export function applyScore(hitType, gameState, callbacks) {
 
 /**
  * Handles the game over state (due to health depletion) or song completion.
- * Stops audio, staff animation, and signals main.js to display the score screen.
+ * Stops audio, staff animation, and updates UI button states via uiAccess.
+ * It NO LONGER directly shows the score screen; that's handled by main.js after this returns.
  * This function mutates the `gameState` object.
  * @param {boolean} songFinished - True if the song completed naturally, false if game over by other means.
  * @param {object} gameState - The current game state object from main.js.
  * Expected properties: isGameOver, gameIsRunning.
  * @param {object} modules - References to other game modules.
  * Expected properties: audio, staff.
- * @param {object} uiAccess - Object containing functions or direct references for UI updates.
- * Expected properties: playPauseButton, settingsButton, showScoreScreen.
+ * @param {object} uiAccess - Object containing functions for UI updates.
+ * Expected properties: setPlayButtonState, setSettingsButtonState.
  */
 export function triggerGameOver(songFinished, gameState, modules, uiAccess) {
     console.log(`GameLogic (triggerGameOver): Called with songFinished: ${songFinished}. Current gameState.isGameOver: ${gameState.isGameOver}`);
@@ -156,22 +159,28 @@ export function triggerGameOver(songFinished, gameState, modules, uiAccess) {
         console.warn("GameLogic (triggerGameOver): Staff module not available or not running.");
     }
 
-    // Update UI elements via uiAccess
-    if (uiAccess && uiAccess.playPauseButton) {
-        uiAccess.playPauseButton.textContent = songFinished ? "Finished" : "Game Over";
-        uiAccess.playPauseButton.disabled = true;
-        console.log("GameLogic (triggerGameOver): Play/Pause button updated and disabled.");
+    // Update UI button states via uiAccess functions provided by main.js
+    const endStateText = songFinished ? "Finished" : "Game Over";
+    if (uiAccess && typeof uiAccess.setPlayButtonState === 'function') {
+        uiAccess.setPlayButtonState(endStateText, true); // Set text and disable
+        console.log("GameLogic (triggerGameOver): Play/Pause button updated and disabled via callback.");
+    } else {
+        console.warn("GameLogic (triggerGameOver): setPlayButtonState function not provided in uiAccess.");
     }
-    if (uiAccess && uiAccess.settingsButton) {
-        uiAccess.settingsButton.disabled = true;
-        console.log("GameLogic (triggerGameOver): Settings button disabled.");
+    if (uiAccess && typeof uiAccess.setSettingsButtonState === 'function') {
+        uiAccess.setSettingsButtonState(true); // Disable settings button
+        console.log("GameLogic (triggerGameOver): Settings button disabled via callback.");
+    } else {
+        console.warn("GameLogic (triggerGameOver): setSettingsButtonState function not provided in uiAccess.");
     }
 
-    if (uiAccess && typeof uiAccess.showScoreScreen === 'function') {
-        uiAccess.showScoreScreen(); // Display the final score screen
-    } else {
-        console.warn("GameLogic (triggerGameOver): showScoreScreen function not provided in uiAccess.");
-    }
+    // **REMOVED**: The call to show score screen is now handled in main.js *after* this function returns.
+    // if (uiAccess && typeof uiAccess.showScoreScreen === 'function') {
+    //     uiAccess.showScoreScreen();
+    // } else {
+    //     console.warn("GameLogic (triggerGameOver): showScoreScreen function not provided in uiAccess.");
+    // }
+    console.log("GameLogic (triggerGameOver): Game state updated, modules paused, UI buttons updated.");
 }
 
 
@@ -183,19 +192,21 @@ export function triggerGameOver(songFinished, gameState, modules, uiAccess) {
  * Expected properties: playerHealth, comboCount, ..., isGameOver, gameIsRunning, audioPauseOffset.
  * @param {object} modules - References to other game modules.
  * Expected properties: audio, staff.
- * @param {object} uiAccess - Object containing functions or direct references for UI updates.
- * Expected properties: scoreOverlay, playPauseButton, settingsButton, updateInfoUI.
+ * @param {object} uiAccess - Object containing functions for UI updates.
+ * Expected properties: hideScoreOverlay, setPlayButtonState, setSettingsButtonState, updateInfoUI.
  */
 export function restartGame(gameState, modules, uiAccess) {
     console.log("--- GameLogic (restartGame): Restarting Game ---");
 
-    // Hide score overlay if visible
-    if (uiAccess && uiAccess.scoreOverlay && uiAccess.scoreOverlay.classList.contains('visible')) {
-        uiAccess.scoreOverlay.classList.remove('visible');
-        console.log("GameLogic (restartGame): Score overlay hidden.");
+    // **FIXED**: Call the hideScoreOverlay function if provided
+    if (uiAccess && typeof uiAccess.hideScoreOverlay === 'function') {
+        uiAccess.hideScoreOverlay();
+        console.log("GameLogic (restartGame): Score overlay hidden via callback.");
+    } else {
+         console.warn("GameLogic (restartGame): hideScoreOverlay function not provided in uiAccess.");
     }
 
-    // Reset game state variables
+    // Reset game state variables within the provided gameState object
     gameState.playerHealth = INITIAL_HEALTH;
     gameState.comboCount = 0;
     gameState.totalScore = 0;
@@ -223,22 +234,26 @@ export function restartGame(gameState, modules, uiAccess) {
         console.log("GameLogic (restartGame): Staff module reset and redraw called.");
     }
 
+    // Call the UI update callback provided by main.js to refresh health/combo display
     if (uiAccess && typeof uiAccess.updateInfoUI === 'function') {
-        uiAccess.updateInfoUI(); // Update health bar and combo display
+        uiAccess.updateInfoUI();
     } else {
         console.warn("GameLogic (restartGame): updateInfoUI function not provided in uiAccess.");
     }
 
 
-    // Reset UI button states
-    if (uiAccess && uiAccess.playPauseButton) {
-        uiAccess.playPauseButton.textContent = "Play";
-        uiAccess.playPauseButton.disabled = false;
-        console.log("GameLogic (restartGame): Play/Pause button reset.");
+    // Reset UI button states via uiAccess functions
+    if (uiAccess && typeof uiAccess.setPlayButtonState === 'function') {
+        uiAccess.setPlayButtonState("Play", false); // Set text to "Play" and enable
+        console.log("GameLogic (restartGame): Play/Pause button reset via callback.");
+    } else {
+         console.warn("GameLogic (restartGame): setPlayButtonState function not provided in uiAccess.");
     }
-    if (uiAccess && uiAccess.settingsButton) {
-        uiAccess.settingsButton.disabled = false;
-        console.log("GameLogic (restartGame): Settings button reset.");
+    if (uiAccess && typeof uiAccess.setSettingsButtonState === 'function') {
+        uiAccess.setSettingsButtonState(false); // Enable settings button
+        console.log("GameLogic (restartGame): Settings button reset via callback.");
+    } else {
+         console.warn("GameLogic (restartGame): setSettingsButtonState function not provided in uiAccess.");
     }
 
     console.log("GameLogic (restartGame): Game reset process complete.");
