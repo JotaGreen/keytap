@@ -12,7 +12,7 @@ A web-based rhythm game that combines Guitar Hero-style gameplay with piano shee
 - Client-side only implementation (no server required)
 - Files should be completely loaded/buffered before gameplay begins to avoid delays or synchronization issues
 - Use audioContext.currentTime as the source of truth for timing animations
-- Add plenty of comments in the code and many console logs to facilitate understanding, debugging and future changes
+- Add plenty of comments, documentation, and console logs in the code to facilitate understanding, debugging and future changes
 
 ## Game Screen Layout
 
