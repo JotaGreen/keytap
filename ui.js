@@ -13,11 +13,12 @@ console.log("UI Module: Loading...");
 let loadingScreen, audioFileInput, notesFileInput, loadingStatus, startButton;
 let gameContainer, infoSection, staffSection, bottomPanel, keyboardSection;
 let playPauseButton, settingsButton, comboCountSpan, healthBarElement;
-let settingsOverlay, colorToggleSwitch, noDeathToggleSwitch, closeSettingsButton;
+let settingsOverlay, colorToggleSwitch, noDeathToggleSwitch, waitModeToggleSwitch, closeSettingsButton; // Added waitModeToggleSwitch
 let staffScaleValueSpan, staffScaleDownButton, staffScaleUpButton;
 let hitWindowValueSpan, hitWindowDownButton, hitWindowUpButton;
 let scoreOverlay, scorePerfectCount, scorePerfectPercent, scoreGoodCount, scoreGoodPercent;
 let scoreMissCount, scoreMissPercent, scoreMaxCombo, scoreTotalScore, restartButton;
+let waitModeStatusIndicator; // Optional: For displaying "Waiting..." message
 
 // Callbacks (initialized in initUI)
 let onStartGame = () => console.warn("UI: onStartGame callback not set!");
@@ -46,6 +47,7 @@ let onCloseSettings = () => console.warn("UI: onCloseSettings callback not set!"
  * @param {number} initialState.hitWindowMs - Initial hit window (ms).
  * @param {boolean} initialState.useColoredNotes - Initial state for color toggle.
  * @param {boolean} initialState.noDeathMode - Initial state for no death mode toggle.
+ * @param {boolean} initialState.waitModeActive - Initial state for wait mode toggle. // Added for wait mode
  * @param {number} initialState.initialHealth - Starting health value.
  * @param {number} initialState.maxHealth - Maximum possible health value.
  * @export
@@ -72,6 +74,7 @@ export function initUI(callbacks, initialState) {
     settingsOverlay = document.getElementById('settingsOverlay');
     colorToggleSwitch = document.getElementById('colorToggleSwitch');
     noDeathToggleSwitch = document.getElementById('noDeathToggleSwitch');
+    waitModeToggleSwitch = document.getElementById('waitModeToggleSwitch'); // Added for wait mode
     closeSettingsButton = document.getElementById('closeSettingsButton');
     staffScaleValueSpan = document.getElementById('staffScaleValue');
     staffScaleDownButton = document.getElementById('staffScaleDown');
@@ -89,10 +92,13 @@ export function initUI(callbacks, initialState) {
     scoreMaxCombo = document.getElementById('scoreMaxCombo');
     scoreTotalScore = document.getElementById('scoreTotalScore');
     restartButton = document.getElementById('restartButton');
+
+    // Optional: Add an element in your HTML (e.g., within infoSection) for wait mode status
+    // waitModeStatusIndicator = document.getElementById('waitModeStatusIndicator');
     console.log("UI Module (initUI): DOM elements assigned.");
 
     // --- Validate Essential Elements ---
-    if (!loadingScreen || !startButton || !gameContainer || !audioFileInput || !notesFileInput || !loadingStatus || !playPauseButton || !settingsButton || !settingsOverlay || !scoreOverlay) {
+    if (!loadingScreen || !startButton || !gameContainer || !audioFileInput || !notesFileInput || !loadingStatus || !playPauseButton || !settingsButton || !settingsOverlay || !scoreOverlay || !waitModeToggleSwitch) { // Added waitModeToggleSwitch to validation
         console.error("UI CRITICAL ERROR: Essential UI elements for startup/gameplay are missing!");
         alert("Error: Could not initialize game interface. Key elements missing.");
         return; // Stop initialization
@@ -145,8 +151,7 @@ function attachEventListeners() {
     if (startButton) {
         startButton.addEventListener('click', () => {
             console.log("UI: Start button clicked.");
-            // The check for file readiness should happen in the main logic before calling onStartGame
-            onStartGame(); // Call the callback provided by main.js
+            onStartGame();
         });
     }
 
@@ -154,7 +159,7 @@ function attachEventListeners() {
     if (playPauseButton) {
         playPauseButton.addEventListener('click', () => {
             console.log("UI: Play/Pause button clicked.");
-            onPlayPause(); // Call the callback
+            onPlayPause();
         });
     }
 
@@ -162,8 +167,7 @@ function attachEventListeners() {
     if (settingsButton) {
         settingsButton.addEventListener('click', () => {
             console.log("UI: Settings button clicked.");
-            onOpenSettings(); // Call the callback
-            // Showing the overlay is handled by the main logic via showSettingsOverlay()
+            onOpenSettings();
         });
     }
 
@@ -171,8 +175,8 @@ function attachEventListeners() {
     if (closeSettingsButton) {
         closeSettingsButton.addEventListener('click', () => {
             console.log("UI: Close Settings button clicked.");
-            hideSettingsOverlay(); // Directly hide overlay
-            onCloseSettings(); // Notify main logic
+            hideSettingsOverlay();
+            onCloseSettings();
         });
     }
 
@@ -181,7 +185,7 @@ function attachEventListeners() {
         colorToggleSwitch.addEventListener('change', (event) => {
             const value = event.target.checked;
             console.log(`UI: Color notes setting changed to: ${value}`);
-            onSettingChange('useColoredNotes', value); // Notify main logic
+            onSettingChange('useColoredNotes', value);
         });
     }
 
@@ -190,7 +194,16 @@ function attachEventListeners() {
         noDeathToggleSwitch.addEventListener('change', (event) => {
             const value = event.target.checked;
             console.log(`UI: No Death Mode setting changed to: ${value}`);
-            onSettingChange('noDeathMode', value); // Notify main logic
+            onSettingChange('noDeathMode', value);
+        });
+    }
+
+    // Settings: Wait Mode Toggle Switch // Added for wait mode
+    if (waitModeToggleSwitch) {
+        waitModeToggleSwitch.addEventListener('change', (event) => {
+            const value = event.target.checked;
+            console.log(`UI: Wait Mode setting changed to: ${value}`);
+            onSettingChange('waitModeActive', value); // Notify main logic with new setting name
         });
     }
 
@@ -201,14 +214,13 @@ function attachEventListeners() {
             const currentValue = parseInt(staffScaleValueSpan.textContent || STAFF_SCALE_MIN.toString(), 10);
             const newValue = Math.max(STAFF_SCALE_MIN, currentValue - STAFF_SCALE_STEP);
             console.log(`UI: Staff scale decreased to: ${newValue}`);
-            onSettingChange('scrollSpeed', newValue); // Notify main logic
-            // Main logic will update the span via updateSettingsUI
+            onSettingChange('scrollSpeed', newValue);
         });
         staffScaleUpButton.addEventListener('click', () => {
             const currentValue = parseInt(staffScaleValueSpan.textContent || STAFF_SCALE_MIN.toString(), 10);
             const newValue = Math.min(STAFF_SCALE_MAX, currentValue + STAFF_SCALE_STEP);
             console.log(`UI: Staff scale increased to: ${newValue}`);
-            onSettingChange('scrollSpeed', newValue); // Notify main logic
+            onSettingChange('scrollSpeed', newValue);
         });
     }
 
@@ -219,13 +231,13 @@ function attachEventListeners() {
             const currentValue = parseInt(hitWindowValueSpan.textContent || HIT_WINDOW_MIN.toString(), 10);
             const newValue = Math.max(HIT_WINDOW_MIN, currentValue - HIT_WINDOW_STEP);
             console.log(`UI: Hit window decreased to: ${newValue}ms`);
-            onSettingChange('hitWindowMs', newValue); // Notify main logic
+            onSettingChange('hitWindowMs', newValue);
         });
         hitWindowUpButton.addEventListener('click', () => {
             const currentValue = parseInt(hitWindowValueSpan.textContent || HIT_WINDOW_MIN.toString(), 10);
             const newValue = Math.min(HIT_WINDOW_MAX, currentValue + HIT_WINDOW_STEP);
             console.log(`UI: Hit window increased to: ${newValue}ms`);
-            onSettingChange('hitWindowMs', newValue); // Notify main logic
+            onSettingChange('hitWindowMs', newValue);
         });
     }
 
@@ -233,7 +245,7 @@ function attachEventListeners() {
     if (restartButton) {
         restartButton.addEventListener('click', () => {
             console.log("UI: Restart button clicked.");
-            onRestart(); // Call the callback
+            onRestart();
         });
     }
 
@@ -247,8 +259,7 @@ function attachEventListeners() {
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(() => {
             console.log("UI: Executing debounced resize handling.");
-            handleLayoutChange(); // Call internal layout handler
-            // Main logic might need to call staff.handleResize separately if needed
+            handleLayoutChange();
         }, 150);
     });
 }
@@ -264,19 +275,18 @@ function handleAudioFileSelect(event) {
     const file = event.target.files ? event.target.files[0] : null;
     console.log(`UI: Audio file selected: ${file?.name ?? 'None'}`);
     if (!file) {
-        onFileSelected('audio', null); // Notify main logic that selection was cleared
+        onFileSelected('audio', null);
         return;
     }
-    // Basic type check (can be enhanced in main logic)
     if (!file.type.startsWith('audio/mpeg') && !file.name.toLowerCase().endsWith('.mp3')) {
         alert("Invalid audio file type. Please select an MP3 file.");
-        event.target.value = ''; // Clear the input
-        onFileSelected('audio', null); // Notify main logic
+        event.target.value = '';
+        onFileSelected('audio', null);
         return;
     }
     setLoadingStatus("Loading audio...");
     if (startButton) startButton.disabled = true;
-    onFileSelected('audio', file); // Pass the file object to main logic
+    onFileSelected('audio', file);
 }
 
 /**
@@ -288,19 +298,18 @@ function handleNotesFileSelect(event) {
     const file = event.target.files ? event.target.files[0] : null;
     console.log(`UI: Notes file selected: ${file?.name ?? 'None'}`);
     if (!file) {
-        onFileSelected('notes', null); // Notify main logic that selection was cleared
+        onFileSelected('notes', null);
         return;
     }
-    // Basic type check
     if (!file.type.startsWith('application/json') && !file.name.toLowerCase().endsWith('.json')) {
         alert("Invalid notes file type. Please select a JSON file.");
-        event.target.value = ''; // Clear the input
-        onFileSelected('notes', null); // Notify main logic
+        event.target.value = '';
+        onFileSelected('notes', null);
         return;
     }
     setLoadingStatus("Loading notes...");
     if (startButton) startButton.disabled = true;
-    onFileSelected('notes', file); // Pass the file object to main logic
+    onFileSelected('notes', file);
 }
 
 /**
@@ -425,15 +434,14 @@ export function updateInfoUI(currentHealth, maxHealth, currentCombo) {
         const healthPercentage = Math.max(0, Math.min(100, (currentHealth / maxHealth) * 100));
         healthBarElement.style.width = `${healthPercentage}%`;
 
-        // Update color based on health percentage
         if (healthPercentage <= 0) {
-            healthBarElement.style.backgroundColor = '#555555'; // Grey when empty
+            healthBarElement.style.backgroundColor = '#555555';
         } else if (healthPercentage < 25) {
-            healthBarElement.style.backgroundColor = '#f44336'; // Red
+            healthBarElement.style.backgroundColor = '#f44336';
         } else if (healthPercentage < 50) {
-            healthBarElement.style.backgroundColor = '#ff9800'; // Orange
+            healthBarElement.style.backgroundColor = '#ff9800';
         } else {
-            healthBarElement.style.backgroundColor = '#4CAF50'; // Green
+            healthBarElement.style.backgroundColor = '#4CAF50';
         }
     } else if (maxHealth <= 0) {
         console.warn("UI (updateInfoUI): maxHealth is zero or negative, cannot calculate percentage.");
@@ -447,6 +455,7 @@ export function updateInfoUI(currentHealth, maxHealth, currentCombo) {
  * @param {number} settings.hitWindowMs - Current hit window (ms).
  * @param {boolean} settings.useColoredNotes - Current state for color toggle.
  * @param {boolean} settings.noDeathMode - Current state for no death mode toggle.
+ * @param {boolean} settings.waitModeActive - Current state for wait mode toggle. // Added for wait mode
  * @export
  */
 export function updateSettingsUI(settings) {
@@ -466,6 +475,9 @@ export function updateSettingsUI(settings) {
     }
     if (noDeathToggleSwitch && settings.noDeathMode !== undefined) {
         noDeathToggleSwitch.checked = settings.noDeathMode;
+    }
+    if (waitModeToggleSwitch && settings.waitModeActive !== undefined) { // Added for wait mode
+        waitModeToggleSwitch.checked = settings.waitModeActive;
     }
     console.log("UI: Settings UI update attempt complete.");
 }
@@ -491,7 +503,6 @@ export function showScoreScreen(stats) {
     const { perfectCount = 0, goodCount = 0, missCount = 0, maxCombo = 0, totalScore = 0, totalNotesInSong = 0 } = stats;
 
     const processedNotes = perfectCount + goodCount + missCount;
-    // Use totalNotesInSong if available and greater than processed, otherwise use processed count. Avoid division by zero.
     const totalNotesForPercentage = (totalNotesInSong > 0 && totalNotesInSong >= processedNotes) ? totalNotesInSong : (processedNotes > 0 ? processedNotes : 1);
 
     console.log(`UI (showScoreScreen): Calculating percentages based on ${totalNotesForPercentage} notes.`);
@@ -500,7 +511,6 @@ export function showScoreScreen(stats) {
     const goodPercentVal = ((goodCount / totalNotesForPercentage) * 100).toFixed(1);
     const missPercentVal = ((missCount / totalNotesForPercentage) * 100).toFixed(1);
 
-    // Update score display elements
     if (scorePerfectCount) scorePerfectCount.textContent = perfectCount;
     if (scorePerfectPercent) scorePerfectPercent.textContent = perfectPercentVal;
     if (scoreGoodCount) scoreGoodCount.textContent = goodCount;
@@ -510,25 +520,24 @@ export function showScoreScreen(stats) {
     if (scoreMaxCombo) scoreMaxCombo.textContent = maxCombo;
     if (scoreTotalScore) scoreTotalScore.textContent = totalScore;
 
-    showScoreOverlay(); // Make the overlay visible
+    showScoreOverlay();
     console.log("UI: Score screen populated and displayed.");
 }
 
 /**
  * Sets the text and disabled state of the main play/pause button.
- * @param {'Play' | 'Pause' | 'Loading' | 'Finished' | 'Game Over'} state - The desired button state/text.
- * @param {boolean} [disabled=false] - Optional override for the disabled state.
+ * @param {'Play' | 'Pause' | 'Loading' | 'Finished' | 'Game Over' | 'Waiting...'} state - The desired button state/text.
+ * @param {boolean} [disabled=undefined] - Optional override for the disabled state.
  * @export
  */
 export function setPlayButtonState(state, disabled = undefined) {
     if (playPauseButton) {
         console.log(`UI: Setting play button state to "${state}", disabled: ${disabled ?? 'auto'}`);
         playPauseButton.textContent = state;
-        // Disable automatically for certain states unless explicitly overridden
         if (disabled !== undefined) {
             playPauseButton.disabled = disabled;
         } else {
-            playPauseButton.disabled = (state === 'Loading' || state === 'Finished' || state === 'Game Over');
+            playPauseButton.disabled = (state === 'Loading' || state === 'Finished' || state === 'Game Over' || state === 'Waiting...');
         }
     } else {
         console.warn("UI: Play/Pause button not found, cannot set state.");
@@ -549,6 +558,29 @@ export function setSettingsButtonState(disabled) {
     }
 }
 
+/**
+ * Displays or clears a status message for Wait Mode.
+ * @param {string | null} message - The message to display, or null to clear.
+ * @export
+ */
+export function setWaitModeStatusMessage(message) {
+    if (waitModeStatusIndicator) {
+        if (message) {
+            waitModeStatusIndicator.textContent = message;
+            waitModeStatusIndicator.style.display = 'block'; // Or your preferred display style
+            console.log(`UI: Displaying Wait Mode status: "${message}"`);
+        } else {
+            waitModeStatusIndicator.textContent = '';
+            waitModeStatusIndicator.style.display = 'none';
+            console.log("UI: Clearing Wait Mode status.");
+        }
+    } else if (message) {
+        // Fallback if dedicated element doesn't exist, could use loadingStatus or a temporary message.
+        // For now, just log it.
+        console.log(`UI: Wait Mode status (no dedicated element): "${message}"`);
+    }
+}
+
 
 // --- Layout ---
 
@@ -556,7 +588,7 @@ export function setSettingsButtonState(disabled) {
  * Handles layout adjustments for orientation changes or resizing.
  * Rearranges elements between portrait and landscape modes.
  * Should also be called initially.
- * @export // Exporting in case main logic needs to trigger it, though resize listener handles most cases.
+ * @export
  */
 export function handleLayoutChange() {
     console.log("UI: Adjusting layout for orientation/resize.");
@@ -568,45 +600,29 @@ export function handleLayoutChange() {
     const isLandscape = window.matchMedia("(orientation: landscape)").matches;
     console.log(`UI (handleLayoutChange): Detected orientation: ${isLandscape ? 'landscape' : 'portrait'}`);
 
-    // Reset styles potentially added by JS (might not be strictly necessary with CSS approach)
-    // infoSection.style.order = ''; infoSection.style.width = ''; infoSection.style.height = ''; infoSection.style.borderRight = ''; infoSection.style.borderBottom = '';
-    // staffSection.style.order = ''; staffSection.style.width = ''; staffSection.style.height = ''; staffSection.style.borderBottom = '';
-    // bottomPanel.style.order = ''; bottomPanel.style.width = ''; bottomPanel.style.height = ''; bottomPanel.style.flexDirection = ''; bottomPanel.style.borderTop = '';
-    // keyboardSection.style.order = ''; keyboardSection.style.width = ''; keyboardSection.style.height = ''; keyboardSection.style.borderLeft = '';
-
-    // --- DOM Manipulation for Layout ---
-    // In Landscape: Move infoSection into bottomPanel, before keyboardSection
-    // In Portrait: Move infoSection out of bottomPanel, before staffSection
     if (isLandscape) {
-        // Ensure infoSection is inside bottomPanel and positioned correctly
         if (infoSection.parentElement !== bottomPanel) {
             bottomPanel.insertBefore(infoSection, keyboardSection);
             console.log("UI (Layout): Moved infoSection into bottomPanel for landscape.");
         } else {
-             // Ensure correct order if already inside
              if (bottomPanel.children[0] !== infoSection) {
                  bottomPanel.insertBefore(infoSection, keyboardSection);
                  console.log("UI (Layout): Reordered infoSection within bottomPanel for landscape.");
              }
         }
     } else { // Portrait
-        // Ensure infoSection is outside bottomPanel and positioned correctly
         if (infoSection.parentElement === bottomPanel) {
             gameContainer.insertBefore(infoSection, staffSection);
             console.log("UI (Layout): Moved infoSection out of bottomPanel for portrait.");
         } else {
-            // Ensure correct order if already outside
-            if (gameContainer.children[0] !== infoSection) { // Assuming info is first in portrait
+            if (gameContainer.children[0] !== infoSection) {
                  gameContainer.insertBefore(infoSection, staffSection);
                  console.log("UI (Layout): Reordered infoSection within gameContainer for portrait.");
             }
         }
     }
-    // The actual layout changes (sizing, borders) are primarily handled by CSS @media query.
-    // This JS logic just ensures the correct parent-child relationships for the CSS rules to apply.
 
     console.log("UI: Layout adjustment attempt complete.");
-    // Note: Staff canvas resize is handled separately by the staff module via its own handleResize.
 }
 
 
