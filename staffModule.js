@@ -10,30 +10,27 @@
 console.log("Staff Module: Script loading...");
 
 // --- Module Imports ---
-import * as audio from './audioModule.js';
-import { getMidiNoteColor } from './midiColorConverter.js';
+import * as audio from './audioModule.js'; // Audio playback functions
+import { getMidiNoteColor } from './midiColorConverter.js'; // Color conversion utility
 
-// Import functions/variables from main.js (or future gameLogic.js/config.js)
-// Direct imports for static values:
-import {
-    isGameOver, // This is a getter function in the new main.js, but here it's used as if it's a direct value.
-                 // This will need to be changed to use the callback.
-    useColoredNotes, // Same as above.
-    PRE_DELAY_SECONDS,
-    scrollSpeedPixelsPerSecond,
-    hitWindowGoodSec,
-    hitWindowPerfectSec
-} from './main.js'; // Note: Some of these might become callbacks/getters from main.js
+// --- Placeholder for functions/values that will be passed from main.js during init ---
+// These will be replaced by actual functions/getters from main.js via the init config.
+let mainGetIsGameOver = () => { console.warn("Staff: mainGetIsGameOver not initialized"); return false; };
+let mainGetUseColoredNotes = () => { console.warn("Staff: mainGetUseColoredNotes not initialized"); return false; };
+let mainGetScrollSpeed = () => { console.warn("Staff: mainGetScrollSpeed not initialized"); return 120; };
+let mainGetHitWindowGoodSec = () => { console.warn("Staff: mainGetHitWindowGoodSec not initialized"); return 0.140; };
+let mainGetHitWindowPerfectSec = () => { console.warn("Staff: mainGetHitWindowPerfectSec not initialized"); return 0.070; };
+let mainGetPreDelaySeconds = () => { console.warn("Staff: mainGetPreDelaySeconds not initialized"); return 1.0; };
 
-// Placeholder for functions that will be passed from main.js during init
-let mainIsWaitModeActive = () => false;
-let mainIsCurrentlyWaitingForKey = () => false;
-let mainGetWaitingForNote = () => null;
-let mainOnWaitModeEnter = (missedNote) => {};
-let mainOnWaitModeExit = () => {};
-let mainApplyScoreCallback = (hitType) => {}; // Callback to main's applyScore
+// Wait Mode related callbacks/getters from main.js
+let mainIsWaitModeActive = () => { console.warn("Staff: mainIsWaitModeActive not initialized"); return false; };
+let mainIsCurrentlyWaitingForKey = () => { console.warn("Staff: mainIsCurrentlyWaitingForKey not initialized"); return false; };
+let mainGetWaitingForNote = () => { console.warn("Staff: mainGetWaitingForNote not initialized"); return null; };
+let mainOnWaitModeEnter = (missedNote) => { console.warn("Staff: mainOnWaitModeEnter not initialized", missedNote);};
+let mainOnWaitModeExit = () => { console.warn("Staff: mainOnWaitModeExit not initialized");};
+let mainApplyScoreCallback = (hitType) => { console.warn("Staff: mainApplyScoreCallback not initialized", hitType);};
 
-console.log("Staff Module: Dependencies potentially imported (some will be via init).");
+console.log("Staff Module: Initial placeholders for main.js communication set.");
 
 
 // --- Configuration Constants (Internal to Staff Rendering) ---
@@ -73,8 +70,7 @@ const HALF_LINE_SPACING = LINE_SPACING / 2;
 let totalStaffLogicalHeight = 150;
 const staffPositions = {};
 let diatonicNoteYPositions = {};
-const midiToDiatonicDegree = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
-const notePitchClasses = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const midiToDiatonicDegree = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6]; // C=0, C#=0, D=1, D#=1, ..., B=6
 
 // --- Note Data & State ---
 let noteMap = null;
@@ -90,69 +86,52 @@ let isDragging = false;
 let dragStartX = 0;
 let dragStartTime = 0;
 let activeFlashes = [];
-let setAudioPauseOffsetFunc = (offset) => {
-    console.warn("Staff Module: setAudioPauseOffsetFunc was not set during init.");
+let setAudioPauseOffsetFunc = (offset) => { // This is for drag-to-seek functionality
+    console.warn("Staff Module: setAudioPauseOffsetFunc (for drag) was not set during init.", offset);
 };
 
 // --- Internal Helper Functions ---
+/** Calculates staff geometry and Y positions for notes. */
 function setupStaffAndNotes() {
-    console.log("Staff Module (setupStaffAndNotes): Calculating staff geometry and note Y positions...");
-    let currentY_rel = 0;
-    const staffPositions_rel = {};
-    staffPositions_rel.F5 = currentY_rel;
-    staffPositions_rel.E5 = staffPositions_rel.F5 + HALF_LINE_SPACING;
-    staffPositions_rel.D5 = staffPositions_rel.F5 + LINE_SPACING;
-    staffPositions_rel.C5 = staffPositions_rel.D5 + HALF_LINE_SPACING;
-    staffPositions_rel.B4 = staffPositions_rel.D5 + LINE_SPACING;
-    staffPositions_rel.A4 = staffPositions_rel.B4 + HALF_LINE_SPACING;
-    staffPositions_rel.G4 = staffPositions_rel.B4 + LINE_SPACING;
-    staffPositions_rel.F4 = staffPositions_rel.G4 + HALF_LINE_SPACING;
-    staffPositions_rel.E4 = staffPositions_rel.G4 + LINE_SPACING;
-    staffPositions_rel.D4 = staffPositions_rel.E4 + HALF_LINE_SPACING;
-    staffPositions_rel.C4 = staffPositions_rel.E4 + LINE_SPACING;
-    staffPositions_rel.B3 = staffPositions_rel.C4 + HALF_LINE_SPACING;
-    staffPositions_rel.A3 = staffPositions_rel.C4 + LINE_SPACING;
-    staffPositions_rel.G3 = staffPositions_rel.A3 + HALF_LINE_SPACING;
-    staffPositions_rel.F3 = staffPositions_rel.A3 + LINE_SPACING;
-    staffPositions_rel.E3 = staffPositions_rel.F3 + HALF_LINE_SPACING;
-    staffPositions_rel.D3 = staffPositions_rel.F3 + LINE_SPACING;
-    staffPositions_rel.C3 = staffPositions_rel.D3 + HALF_LINE_SPACING;
-    staffPositions_rel.B2 = staffPositions_rel.D3 + LINE_SPACING;
-    staffPositions_rel.A2 = staffPositions_rel.B2 + HALF_LINE_SPACING;
+    console.log("Staff Module (setupStaffAndNotes): Calculating staff geometry...");
+    let currentY_rel = 0; const staffPositions_rel = {};
+    staffPositions_rel.F5 = currentY_rel; staffPositions_rel.E5 = staffPositions_rel.F5 + HALF_LINE_SPACING;
+    staffPositions_rel.D5 = staffPositions_rel.F5 + LINE_SPACING; staffPositions_rel.C5 = staffPositions_rel.D5 + HALF_LINE_SPACING;
+    staffPositions_rel.B4 = staffPositions_rel.D5 + LINE_SPACING; staffPositions_rel.A4 = staffPositions_rel.B4 + HALF_LINE_SPACING;
+    staffPositions_rel.G4 = staffPositions_rel.B4 + LINE_SPACING; staffPositions_rel.F4 = staffPositions_rel.G4 + HALF_LINE_SPACING;
+    staffPositions_rel.E4 = staffPositions_rel.G4 + LINE_SPACING; staffPositions_rel.D4 = staffPositions_rel.E4 + HALF_LINE_SPACING;
+    staffPositions_rel.C4 = staffPositions_rel.E4 + LINE_SPACING; staffPositions_rel.B3 = staffPositions_rel.C4 + HALF_LINE_SPACING;
+    staffPositions_rel.A3 = staffPositions_rel.C4 + LINE_SPACING; staffPositions_rel.G3 = staffPositions_rel.A3 + HALF_LINE_SPACING;
+    staffPositions_rel.F3 = staffPositions_rel.A3 + LINE_SPACING; staffPositions_rel.E3 = staffPositions_rel.F3 + HALF_LINE_SPACING;
+    staffPositions_rel.D3 = staffPositions_rel.F3 + LINE_SPACING; staffPositions_rel.C3 = staffPositions_rel.D3 + HALF_LINE_SPACING;
+    staffPositions_rel.B2 = staffPositions_rel.D3 + LINE_SPACING; staffPositions_rel.A2 = staffPositions_rel.B2 + HALF_LINE_SPACING;
     staffPositions_rel.G2 = staffPositions_rel.B2 + LINE_SPACING;
-    const noteNames = ["C", "D", "E", "F", "G", "A", "B"];
-    const midiRef = 60;
-    const yRef_rel = staffPositions_rel.C4;
-    diatonicNoteYPositions = {};
-    let minY_rel = Infinity, maxY_rel = -Infinity;
+    const noteNames = ["C", "D", "E", "F", "G", "A", "B"]; const midiRef = 60; const yRef_rel = staffPositions_rel.C4;
+    diatonicNoteYPositions = {}; let minY_rel = Infinity, maxY_rel = -Infinity;
     for (let midi = MIDI_NOTE_MIN; midi <= MIDI_NOTE_MAX; midi++) {
-        const octave = Math.floor(midi / 12) - 1;
-        const noteIndex = midi % 12;
+        const octave = Math.floor(midi / 12) - 1; const noteIndex = midi % 12;
         const diatonicDegree = midiToDiatonicDegree[noteIndex];
-        const referenceOctave = Math.floor(midiRef / 12) - 1;
-        const octaveDifference = octave - referenceOctave;
+        const referenceOctave = Math.floor(midiRef / 12) - 1; const octaveDifference = octave - referenceOctave;
         const stepsFromRefDegree = diatonicDegree - midiToDiatonicDegree[midiRef % 12];
         const totalDiatonicSteps = (octaveDifference * 7) + stepsFromRefDegree;
         const yPos_rel = yRef_rel - (totalDiatonicSteps * HALF_LINE_SPACING);
-        const baseNoteLetter = noteNames[diatonicDegree];
-        const baseNoteName = baseNoteLetter + octave;
+        const baseNoteLetter = noteNames[diatonicDegree]; const baseNoteName = baseNoteLetter + octave;
         if (!(baseNoteName in diatonicNoteYPositions)) {
             diatonicNoteYPositions[baseNoteName] = yPos_rel;
-            minY_rel = Math.min(minY_rel, yPos_rel);
-            maxY_rel = Math.max(maxY_rel, yPos_rel);
+            minY_rel = Math.min(minY_rel, yPos_rel); maxY_rel = Math.max(maxY_rel, yPos_rel);
         }
     }
-    const noteHeight = LINE_SPACING;
-    const topNoteEdgeY_rel = minY_rel - (noteHeight / 2);
+    const noteHeight = LINE_SPACING; const topNoteEdgeY_rel = minY_rel - (noteHeight / 2);
     const bottomNoteEdgeY_rel = maxY_rel + (noteHeight / 2);
     totalStaffLogicalHeight = (bottomNoteEdgeY_rel - topNoteEdgeY_rel) + (STAFF_PADDING * 2);
-    totalStaffLogicalHeight = Math.max(100, totalStaffLogicalHeight);
+    totalStaffLogicalHeight = Math.max(100, totalStaffLogicalHeight); // Min height
     const yOffset = STAFF_PADDING - topNoteEdgeY_rel;
     for (const key in staffPositions_rel) staffPositions[key] = staffPositions_rel[key] + yOffset;
     for (const key in diatonicNoteYPositions) diatonicNoteYPositions[key] += yOffset;
     console.log(`Staff Module (setupStaffAndNotes): Staff Logical Height: ${totalStaffLogicalHeight.toFixed(1)}px. Positions: ${Object.keys(diatonicNoteYPositions).length}`);
 }
 
+/** Finds Y position for a note name. */
 function getNoteYPosition(noteName) {
     const baseNameMatch = noteName.match(/([A-G])[#b]?(\d)/);
     if (baseNameMatch) {
@@ -164,6 +143,7 @@ function getNoteYPosition(noteName) {
     return null;
 }
 
+/** Gets pitch class (e.g., "Db") from a full note name. */
 function getPitchClass(noteName) {
     const match = noteName.match(/([A-G][#b]?)/);
     if (match) {
@@ -189,8 +169,7 @@ function drawRoundedRect(x, y, width, height, radius) {
     ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.arcTo(x + width, y, x + width, y + height, radius); ctx.arcTo(x + width, y + height, x, y + height, radius); ctx.arcTo(x, y + height, x, y, radius); ctx.arcTo(x, y, x + width, y, radius); ctx.closePath(); ctx.fill();
 }
 function drawLedgerLines(note, x, noteWidth) {
-    if (!ctx || note.y === null) return;
-    const y = note.y; const checkTolerance = HALF_LINE_SPACING / 4;
+    if (!ctx || note.y === null) return; const y = note.y; const checkTolerance = HALF_LINE_SPACING / 4;
     ctx.lineWidth = LEDGER_LINE_WIDTH; ctx.strokeStyle = STAFF_LINE_COLOR;
     const ledgerXStart = x - LEDGER_LINE_EXTENSION; const ledgerXEnd = x + noteWidth + LEDGER_LINE_EXTENSION;
     if (y < staffPositions.F5 - checkTolerance) for (let lineY = staffPositions.F5 - LINE_SPACING; lineY >= y - checkTolerance; lineY -= LINE_SPACING) { ctx.beginPath(); ctx.moveTo(ledgerXStart, lineY); ctx.lineTo(ledgerXEnd, lineY); ctx.stroke(); }
@@ -198,419 +177,334 @@ function drawLedgerLines(note, x, noteWidth) {
     if (y > staffPositions.G2 + checkTolerance) for (let lineY = staffPositions.G2 + LINE_SPACING; lineY <= y + checkTolerance; lineY += LINE_SPACING) { ctx.beginPath(); ctx.moveTo(ledgerXStart, lineY); ctx.lineTo(ledgerXEnd, lineY); ctx.stroke(); }
 }
 function drawAccidental(note, x) {
-    if (!ctx || note.y === null) return;
-    const accidentalSymbol = note.name.includes('#') ? '♯' : note.name.includes('b') ? '♭' : null;
+    if (!ctx || note.y === null) return; const accidentalSymbol = note.name.includes('#') ? '♯' : note.name.includes('b') ? '♭' : null;
     if (accidentalSymbol) {
-        ctx.fillStyle = useColoredNotes() ? ACCIDENTAL_COLOR_COLOR_NOTES : ACCIDENTAL_COLOR_BLACK_NOTES; // Use callback
+        ctx.fillStyle = mainGetUseColoredNotes() ? ACCIDENTAL_COLOR_COLOR_NOTES : ACCIDENTAL_COLOR_BLACK_NOTES; // USE GETTER
         ctx.font = `${ACCIDENTAL_FONT_SIZE}px sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
         ctx.fillText(accidentalSymbol, x + ACCIDENTAL_PADDING_X, note.y);
     }
 }
 function drawNote(note, currentDisplayTime) {
-    if (!ctx || note.hitStatus === 'good' || note.hitStatus === 'perfect') return;
-    if (note.y === null || note.y === undefined) return;
-    const noteY = note.y;
-    const timeUntilJudgment = note.time - currentDisplayTime;
-    const noteX = judgmentLineX + (timeUntilJudgment * scrollSpeedPixelsPerSecond()); // Use callback
-    const noteWidth = Math.max(1, note.duration * scrollSpeedPixelsPerSecond()); // Use callback
-    const noteHeight = LINE_SPACING;
-    let currentNoteColor = NOTE_COLOR;
-    if (useColoredNotes()) { // Use callback
-        try { const rgbArray = getMidiNoteColor(note.midi); if (rgbArray && rgbArray.length === 3) currentNoteColor = `rgb(${rgbArray[0]}, ${rgbArray[1]}, ${rgbArray[2]})`; }
-        catch (e) { console.error(`Staff Module (drawNote): Error getMidiNoteColor for MIDI ${note.midi}:`, e); }
+    if (!ctx || note.hitStatus === 'good' || note.hitStatus === 'perfect') return; if (note.y === null || note.y === undefined) return;
+    const noteY = note.y; const timeUntilJudgment = note.time - currentDisplayTime;
+    const noteX = judgmentLineX + (timeUntilJudgment * mainGetScrollSpeed()); // USE GETTER
+    const noteWidth = Math.max(1, note.duration * mainGetScrollSpeed());     // USE GETTER
+    const noteHeight = LINE_SPACING; let currentNoteColor = NOTE_COLOR;
+    if (mainGetUseColoredNotes()) { // USE GETTER
+        try { const rgbArray = getMidiNoteColor(note.midi); if (rgbArray?.length === 3) currentNoteColor = `rgb(${rgbArray.join(',')})`; }
+        catch (e) { console.error(`Staff (drawNote): Error getMidiNoteColor for MIDI ${note.midi}:`, e); }
     }
     if (noteX < canvasWidth && (noteX + noteWidth) > 0) {
-        drawLedgerLines(note, noteX, noteWidth);
-        ctx.fillStyle = currentNoteColor;
+        drawLedgerLines(note, noteX, noteWidth); ctx.fillStyle = currentNoteColor;
         drawRoundedRect(noteX, noteY - noteHeight / 2, noteWidth, noteHeight, NOTE_CORNER_RADIUS);
         drawAccidental(note, noteX);
     }
 }
 function drawJudgmentLine() { if (!ctx) return; ctx.beginPath(); ctx.moveTo(judgmentLineX, 0); ctx.lineTo(judgmentLineX, canvasHeight); ctx.lineWidth = JUDGMENT_LINE_WIDTH; ctx.strokeStyle = JUDGMENT_LINE_COLOR; ctx.stroke(); }
 function drawFlashes() {
-    if (activeFlashes.length === 0 || !ctx || !audio) return;
-    ctx.fillStyle = PERFECT_FLASH_COLOR;
-    const flashHeight = LINE_SPACING * 1.5; const flashWidth = 10;
-    const currentTimeContext = audio.getCurrentContextTime();
+    if (activeFlashes.length === 0 || !ctx || !audio) return; ctx.fillStyle = PERFECT_FLASH_COLOR;
+    const flashHeight = LINE_SPACING * 1.5; const flashWidth = 10; const currentTimeContext = audio.getCurrentContextTime();
     for (let i = activeFlashes.length - 1; i >= 0; i--) {
         const flash = activeFlashes[i];
         if (currentTimeContext >= flash.endTime) activeFlashes.splice(i, 1);
         else drawRoundedRect(judgmentLineX - flashWidth / 2, flash.y - flashHeight / 2, flashWidth, flashHeight, flashWidth / 2);
     }
 }
+/** Internal redraw function. Clears and redraws the entire canvas. */
 function redrawCanvasInternal() {
-    if (!ctx) return;
-    if (!audio && isStaffRunning) console.warn("Staff Module (redrawCanvasInternal): Audio module not available while staff is running.");
-    ctx.save();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.scale(devicePixelRatio, devicePixelRatio);
-    drawGrandStaff();
-    drawJudgmentLine();
+    if (!ctx) return; if (!audio && isStaffRunning) console.warn("Staff (redrawCanvasInternal): Audio module missing while staff running.");
+    ctx.save(); ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.scale(devicePixelRatio, devicePixelRatio);
+    drawGrandStaff(); drawJudgmentLine();
     if (notesToDraw.length > 0) notesToDraw.forEach(note => drawNote(note, displayTime));
     else {
-        ctx.fillStyle = '#888888'; ctx.font = '16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        const message = noteMap ? 'No notes found or processed.' : 'Loading notes...';
+        ctx.fillStyle = '#888'; ctx.font = '16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const message = noteMap ? 'No notes processed.' : 'Loading notes...';
         ctx.fillText(message, canvasWidth / 2, canvasHeight / 2);
     }
-    drawFlashes();
-    ctx.restore();
+    drawFlashes(); ctx.restore();
 }
 
 // --- Animation Loop ---
+/** Main animation loop, called via requestAnimationFrame. */
 function animationLoop() {
-    // Check if game is over (via callback from main.js) or staff shouldn't be running
-    if (isGameOver() || (!isStaffRunning && !mainIsCurrentlyWaitingForKey())) { // Use mainIsCurrentlyWaitingForKey
-        console.log(`Staff Module (animationLoop): Stopping. isGameOver: ${isGameOver()}, isStaffRunning: ${isStaffRunning}, mainIsCurrentlyWaitingForKey: ${mainIsCurrentlyWaitingForKey()}`);
-        animationFrameId = null;
-        return;
+    if (mainGetIsGameOver() || (!isStaffRunning && !mainIsCurrentlyWaitingForKey())) {
+        console.log(`Staff (animationLoop): Stopping. GameOver: ${mainGetIsGameOver()}, StaffRunning: ${isStaffRunning}, WaitingForKey: ${mainIsCurrentlyWaitingForKey()}`);
+        animationFrameId = null; return;
     }
 
-    // If in Wait Mode and waiting for a key, staff does not advance time from audio.
-    // It just keeps redrawing the static scene.
     if (mainIsCurrentlyWaitingForKey()) {
-        // console.log("Staff Module (animationLoop): In Wait Mode pause, redrawing static scene.");
-        // displayTime remains unchanged.
-    } else if (isStaffRunning) { // Only update displayTime if staff is supposed to be running (i.e., song playing)
-        if (audio) {
-            let newTime = audio.getPlaybackTime();
-            displayTime = Math.max(MIN_DISPLAY_TIME, newTime);
-        } else {
-            console.warn("Staff Module (animationLoop): Audio module not available for timing.");
-        }
-    } // else, staff is paused by user, displayTime also remains unchanged.
+        // console.log("Staff (animationLoop): In Wait Mode pause, static redraw.");
+    } else if (isStaffRunning) {
+        if (audio) { displayTime = Math.max(MIN_DISPLAY_TIME, audio.getPlaybackTime()); }
+        else { console.warn("Staff (animationLoop): Audio module missing for timing."); }
+    }
 
-
-    // --- Check for Missed Notes ---
-    // This logic needs to run even if staff is "paused" by wait mode, to trigger the wait mode.
-    // However, if already waiting for a key, don't process further misses until resumed.
     if (!mainIsCurrentlyWaitingForKey()) {
-        const missThresholdTime = displayTime - hitWindowGoodSec(); // Use callback
+        const missThresholdTime = displayTime - mainGetHitWindowGoodSec(); // USE GETTER
         notesToDraw.forEach(note => {
             if (!note.hitStatus && note.time < missThresholdTime) {
-                console.log(`Staff Module (animationLoop): Note missed: ${note.name} at time ${note.time.toFixed(3)} (displayTime: ${displayTime.toFixed(3)})`);
+                console.log(`Staff (animationLoop): Note missed: ${note.name} at ${note.time.toFixed(3)} (displayTime: ${displayTime.toFixed(3)})`);
                 note.hitStatus = 'miss';
-                mainApplyScoreCallback('miss'); // Use callback to apply score
+                mainApplyScoreCallback('miss'); // Use callback for scoring
 
-                // If Wait Mode is active, trigger the wait mode pause in main.js
                 if (mainIsWaitModeActive()) {
-                    console.log(`Staff Module (animationLoop): Wait Mode active. Entering wait for note: ${note.name}`);
-                    // isStaffRunning = false; // Stop staff's own scrolling
-                    mainOnWaitModeEnter(note); // Notify main.js to pause audio & set waiting state
-                    // The animationLoop will continue (to allow key presses) but displayTime won't advance from audio.
+                    console.log(`Staff (animationLoop): Wait Mode active. Entering wait for note: ${note.name}`);
+                    // isStaffRunning = false; // Main will set its gameIsRunning, staff follows that via isStaffRunning
+                    mainOnWaitModeEnter(note); // Notify main.js
                 }
             }
         });
     }
-
     redrawCanvasInternal();
-
-    // Request next frame if game not over.
-    // If waiting for key, we still need to loop for redraws and key press checks.
-    if (!isGameOver()) {
-        animationFrameId = requestAnimationFrame(animationLoop);
-    } else {
-        animationFrameId = null;
-    }
+    if (!mainGetIsGameOver()) animationFrameId = requestAnimationFrame(animationLoop);
+    else animationFrameId = null;
 }
 
 // --- Internal Core Logic Functions ---
+/** Internal implementation for judging a key press. */
 function judgeKeyPressInternal(keyName) {
-    // console.log(`Staff Module (judgeKeyPressInternal): Judging key: ${keyName}, displayTime: ${displayTime.toFixed(3)}`);
-
-    // If in Wait Mode and waiting for a specific key
     if (mainIsCurrentlyWaitingForKey()) {
         const noteToHit = mainGetWaitingForNote();
         if (noteToHit) {
             const targetPitchClass = getPitchClass(noteToHit.name);
             if (targetPitchClass === keyName) {
-                console.log(`Staff Module (judgeKeyPressInternal): Correct key '${keyName}' pressed for waiting note '${noteToHit.name}'. Resuming.`);
-                mainOnWaitModeExit(); // Notify main.js to resume audio & clear waiting state
-                // isStaffRunning = true; // Staff can resume scrolling
-                // NO SCORE OR COMBO for this resume key press.
-                return 'resumed_wait_mode'; // Special return type, not 'perfect' or 'good' for scoring
+                console.log(`Staff (judgeKeyPressInternal): Correct key '${keyName}' for waiting note '${noteToHit.name}'. Resuming.`);
+                mainOnWaitModeExit(); // Notify main.js to resume
+                return 'resumed_wait_mode'; // Special non-scoring return
             } else {
-                console.log(`Staff Module (judgeKeyPressInternal): Incorrect key '${keyName}' pressed while waiting for '${targetPitchClass}'. Still waiting.`);
-                return null; // Incorrect key, do nothing, remain paused.
+                console.log(`Staff (judgeKeyPressInternal): Incorrect key '${keyName}' while waiting for '${targetPitchClass}'.`);
+                return null;
             }
         } else {
-            console.warn("Staff Module (judgeKeyPressInternal): In wait mode but waitingForNote is null. This shouldn't happen.");
-            mainOnWaitModeExit(); // Try to recover by exiting wait mode.
-            return null;
+            console.warn("Staff (judgeKeyPressInternal): In wait mode but waitingForNote is null.");
+            mainOnWaitModeExit(); return null; // Attempt recovery
         }
     }
 
-    // Normal key press judgment (not in wait mode pause)
-    if (!isStaffRunning || isGameOver() || !audio) { // Use isGameOver()
-        return null;
-    }
+    if (!isStaffRunning || mainGetIsGameOver() || !audio) return null;
 
-    const currentJudgmentTime = displayTime;
-    let hitResult = null;
-    let bestNote = null;
-    let minTimeDiff = Infinity;
-
+    const currentJudgmentTime = displayTime; let hitResult = null; let bestNote = null; let minTimeDiff = Infinity;
     for (const note of notesToDraw) {
         if (note.hitStatus) continue;
-        const timeDiff = note.time - currentJudgmentTime;
-        const absTimeDiff = Math.abs(timeDiff);
-        if (absTimeDiff <= hitWindowGoodSec()) { // Use callback
+        const timeDiff = note.time - currentJudgmentTime; const absTimeDiff = Math.abs(timeDiff);
+        if (absTimeDiff <= mainGetHitWindowGoodSec()) { // USE GETTER
             const notePitchClass = getPitchClass(note.name);
             if (notePitchClass === keyName) {
-                if (absTimeDiff < minTimeDiff) {
-                    minTimeDiff = absTimeDiff;
-                    bestNote = note;
-                }
+                if (absTimeDiff < minTimeDiff) { minTimeDiff = absTimeDiff; bestNote = note; }
             }
         }
     }
-
     if (bestNote) {
         const flashEndTimeContext = audio.getCurrentContextTime() + (PERFECT_FLASH_DURATION_MS / 1000.0);
-        if (minTimeDiff <= hitWindowPerfectSec()) { // Use callback
-            bestNote.hitStatus = 'perfect';
-            hitResult = 'perfect';
+        if (minTimeDiff <= mainGetHitWindowPerfectSec()) { // USE GETTER
+            bestNote.hitStatus = 'perfect'; hitResult = 'perfect';
             activeFlashes.push({ y: bestNote.y, endTime: flashEndTimeContext });
-            mainApplyScoreCallback('perfect'); // Use callback
+            mainApplyScoreCallback('perfect'); // Use callback for scoring
         } else {
-            bestNote.hitStatus = 'good';
-            hitResult = 'good';
-            mainApplyScoreCallback('good'); // Use callback
+            bestNote.hitStatus = 'good'; hitResult = 'good';
+            mainApplyScoreCallback('good'); // Use callback for scoring
         }
     }
     return hitResult;
 }
 
+/** Internal implementation to start or resume staff animation and audio. */
 function playAnimationInternal(resumeOffset = 0) {
-    console.log(`Staff Module (playAnimationInternal): Attempting to play. isStaffRunning: ${isStaffRunning}, isGameOver: ${isGameOver()}, audio ready: ${audio?.isReady()}`);
-
-    // Do not start if game is over or if currently in a "wait mode" pause.
-    if (isGameOver() || mainIsCurrentlyWaitingForKey()) {
-        console.warn(`Staff Module (playAnimationInternal): Cannot play. Game Over or Waiting for Key. isGameOver: ${isGameOver()}, mainIsCurrentlyWaitingForKey: ${mainIsCurrentlyWaitingForKey()}`);
+    console.log(`Staff (playAnimationInternal): Attempting play. isStaffRunning: ${isStaffRunning}, GameOver: ${mainGetIsGameOver()}, Waiting: ${mainIsCurrentlyWaitingForKey()}, AudioReady: ${audio?.isReady()}`);
+    if (mainGetIsGameOver() || mainIsCurrentlyWaitingForKey()) {
+        console.warn(`Staff (playAnimationInternal): Cannot play. GameOver or WaitingForKey.`);
         return;
     }
-
     if (!isStaffRunning && audio && audio.isReady()) {
-        console.log(`Staff Module (playAnimationInternal): Playing animation and audio from offset: ${resumeOffset.toFixed(3)}s. PRE_DELAY_SECONDS: ${PRE_DELAY_SECONDS()}`); // Use callback
-        isStaffRunning = true; // Staff is now actively scrolling with audio
+        console.log(`Staff (playAnimationInternal): Playing animation/audio from offset: ${resumeOffset.toFixed(3)}s. PreDelay: ${mainGetPreDelaySeconds()}`);
+        isStaffRunning = true; // Staff is now actively scrolling
         if (canvas) canvas.style.cursor = 'default';
-
-        audio.play(resumeOffset, PRE_DELAY_SECONDS()); // Use callback
-
+        audio.play(resumeOffset, mainGetPreDelaySeconds()); // USE GETTER for pre-delay
         if (!animationFrameId) {
-            console.log("Staff Module (playAnimationInternal): Requesting new animation frame.");
+            console.log("Staff (playAnimationInternal): Requesting new animation frame.");
             displayTime = Math.max(MIN_DISPLAY_TIME, audio.getPlaybackTime());
             animationFrameId = requestAnimationFrame(animationLoop);
         }
     } else {
-        console.warn(`Staff Module (playAnimationInternal): Conditions not met. isStaffRunning: ${isStaffRunning}, Audio Ready: ${audio?.isReady()}`);
+        console.warn(`Staff (playAnimationInternal): Conditions not met. isStaffRunning: ${isStaffRunning}, AudioReady: ${audio?.isReady()}`);
     }
 }
 
+/** Internal implementation to pause staff animation and audio (user-initiated). */
 function pauseAnimationInternal() {
-    console.log(`Staff Module (pauseAnimationInternal): Attempting to pause. Current isStaffRunning: ${isStaffRunning}`);
-
-    // If the game is paused because of Wait Mode, this function should not interfere with audio.pause()
-    // that was already called by mainOnWaitModeEnter.
-    // This pause is for user-initiated pauses.
+    console.log(`Staff (pauseAnimationInternal): Attempting pause. isStaffRunning: ${isStaffRunning}`);
     if (mainIsCurrentlyWaitingForKey()) {
-        console.log("Staff Module (pauseAnimationInternal): Already paused by Wait Mode. User pause ignored or redundant.");
-        // isStaffRunning should already be false or handled by the wait mode logic.
-        return audio ? audio.getPlaybackTime() : displayTime; // Return current time
+        console.log("Staff (pauseAnimationInternal): Already paused by Wait Mode. User pause redundant.");
+        return audio ? audio.getPlaybackTime() : displayTime;
     }
-
     if (isStaffRunning) {
-        isStaffRunning = false; // Stop staff's own scrolling due to song playback
+        isStaffRunning = false; // Staff scrolling stops
         if (canvas) canvas.style.cursor = 'grab';
         if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
-
-        const pauseOff = audio ? audio.pause() : 0; // This is a user pause, so do pause audio.
-        console.log(`Staff Module (pauseAnimationInternal): User Paused. Audio offset: ${pauseOff.toFixed(3)}`);
+        const pauseOff = audio ? audio.pause() : 0; // User pause, so pause audio
+        console.log(`Staff (pauseAnimationInternal): User Paused. Audio offset: ${pauseOff.toFixed(3)}`);
         displayTime = Math.max(MIN_DISPLAY_TIME, pauseOff);
         return pauseOff;
     }
     const currentAudioTime = audio ? audio.getPlaybackTime() : displayTime;
-    console.log(`Staff Module (pauseAnimationInternal): Was not running. Returning current audio/display time: ${currentAudioTime.toFixed(3)}`);
+    console.log(`Staff (pauseAnimationInternal): Was not running. Current time: ${currentAudioTime.toFixed(3)}`);
     return currentAudioTime;
 }
 
-function resetNotesInternal() {
-    console.log("Staff Module (resetNotesInternal): Resetting hit status and flashes.");
-    notesToDraw.forEach(note => note.hitStatus = null);
-    activeFlashes = [];
-}
-function resetTimeInternal() {
-    console.log(`Staff Module (resetTimeInternal): Resetting displayTime to ${MIN_DISPLAY_TIME}.`);
-    displayTime = MIN_DISPLAY_TIME;
-}
+/** Internal implementation to reset hit status of all notes. */
+function resetNotesInternal() { console.log("Staff (resetNotesInternal): Resetting notes."); notesToDraw.forEach(note => note.hitStatus = null); activeFlashes = []; }
+/** Internal implementation to reset the staff's display time. */
+function resetTimeInternal() { console.log(`Staff (resetTimeInternal): Resetting displayTime.`); displayTime = MIN_DISPLAY_TIME; }
 
 // --- Event Handlers ---
+/** Handles window resize or orientation change for the staff canvas. */
 function handleResizeInternal() {
     if (!staffSectionElement || !canvas || !ctx) return;
-    console.log("Staff Module (handleResizeInternal): Handling resize...");
-    const displayWidth = staffSectionElement.offsetWidth;
-    const displayHeight = staffSectionElement.offsetHeight;
+    console.log("Staff (handleResizeInternal): Resizing...");
+    const displayWidth = staffSectionElement.offsetWidth; const displayHeight = staffSectionElement.offsetHeight;
     if (displayWidth <= 0 || displayHeight <= 0) return;
-    canvasWidth = displayWidth;
-    canvasHeight = Math.min(displayHeight, totalStaffLogicalHeight);
-    canvas.width = Math.round(canvasWidth * devicePixelRatio);
-    canvas.height = Math.round(canvasHeight * devicePixelRatio);
+    canvasWidth = displayWidth; canvasHeight = Math.min(displayHeight, totalStaffLogicalHeight);
+    canvas.width = Math.round(canvasWidth * devicePixelRatio); canvas.height = Math.round(canvasHeight * devicePixelRatio);
     canvas.style.width = `${canvasWidth}px`; canvas.style.height = `${canvasHeight}px`;
     judgmentLineX = canvasWidth * (JUDGMENT_LINE_X_PERCENT / 100.0);
-    console.log(`Staff Module (handleResizeInternal): Resized. Judgment X: ${judgmentLineX.toFixed(1)}`);
+    console.log(`Staff (handleResizeInternal): Resized. Judgment X: ${judgmentLineX.toFixed(1)}`);
     redrawCanvasInternal();
 }
 function getEventX(event) { return event.touches ? event.touches[0].clientX : event.clientX; }
 function handleDragStart(event) {
-    if (!isStaffRunning && !isGameOver() && canvas && !mainIsCurrentlyWaitingForKey()) { // Don't allow drag if waiting for key
-        isDragging = true;
-        dragStartX = getEventX(event) - canvas.getBoundingClientRect().left;
-        dragStartTime = displayTime;
-        canvas.classList.add('dragging');
-        if (event.target === canvas) event.preventDefault();
+    if (!isStaffRunning && !mainGetIsGameOver() && canvas && !mainIsCurrentlyWaitingForKey()) {
+        isDragging = true; dragStartX = getEventX(event) - canvas.getBoundingClientRect().left; dragStartTime = displayTime;
+        canvas.classList.add('dragging'); if (event.target === canvas) event.preventDefault();
     }
 }
 function handleDragMove(event) {
     if (isDragging && canvas) {
-        const currentX = getEventX(event) - canvas.getBoundingClientRect().left;
-        const deltaX = currentX - dragStartX;
-        const deltaTimeOffset = deltaX / scrollSpeedPixelsPerSecond(); // Use callback
+        const deltaX = (getEventX(event) - canvas.getBoundingClientRect().left) - dragStartX;
+        const deltaTimeOffset = deltaX / mainGetScrollSpeed(); // USE GETTER
         displayTime = Math.max(MIN_DISPLAY_TIME, dragStartTime - deltaTimeOffset);
         if (songEndTimeVisual > 0) displayTime = Math.min(displayTime, songEndTimeVisual);
-        redrawCanvasInternal();
-        if (event.target === canvas) event.preventDefault();
+        redrawCanvasInternal(); if (event.target === canvas) event.preventDefault();
     }
 }
 function handleDragEnd(event) {
     if (isDragging && canvas) {
-        isDragging = false;
-        canvas.classList.remove('dragging');
+        isDragging = false; canvas.classList.remove('dragging');
         const newOffset = Math.max(0, displayTime);
-        setAudioPauseOffsetFunc(newOffset);
-        console.log(`Staff Module (handleDragEnd): Drag ended. Updated audio pause offset via callback to: ${newOffset.toFixed(3)}s`);
+        setAudioPauseOffsetFunc(newOffset); // This is for drag-to-seek, passed from main
+        console.log(`Staff (handleDragEnd): Drag ended. Updated audioPauseOffset (drag) to: ${newOffset.toFixed(3)}s`);
         if (event.target === canvas) event.preventDefault();
     }
 }
 
 // --- Initialization & Data Loading ---
+/** Loads and processes note data. */
 function loadNoteData(jsonData) {
-    console.log(`Staff Module (loadNoteData): Processing note data...`);
+    console.log(`Staff (loadNoteData): Processing notes...`);
     try {
         noteMap = jsonData;
-        if (noteMap && noteMap.tracks && noteMap.tracks.length > 0 && noteMap.tracks[0].notes) {
-            const rawNotes = noteMap.tracks[0].notes;
-            totalNotesInSong = rawNotes.length;
-            let lastNoteEndTime = 0;
-            notesToDraw = rawNotes
-                .map(note => {
-                    const yPos = getNoteYPosition(note.name);
-                    const noteEndTime = note.time + note.duration;
-                    if (noteEndTime > lastNoteEndTime) lastNoteEndTime = noteEndTime;
-                    return { ...note, y: yPos, hitStatus: null };
-                })
-                .filter(note => note.y !== null);
+        if (noteMap?.tracks?.[0]?.notes) {
+            const rawNotes = noteMap.tracks[0].notes; totalNotesInSong = rawNotes.length; let lastNoteEndTime = 0;
+            notesToDraw = rawNotes.map(note => {
+                const yPos = getNoteYPosition(note.name); const noteEndTime = note.time + note.duration;
+                if (noteEndTime > lastNoteEndTime) lastNoteEndTime = noteEndTime;
+                return { ...note, y: yPos, hitStatus: null };
+            }).filter(note => note.y !== null);
             songEndTimeVisual = lastNoteEndTime + SONG_END_BUFFER_SEC;
-            console.log(`Staff Module (loadNoteData): Processed ${notesToDraw.length}/${rawNotes.length} notes. Visual song end: ${songEndTimeVisual.toFixed(3)}s`);
-            if (notesToDraw.length === 0 && rawNotes.length > 0) console.error("Staff Module (loadNoteData): All notes filtered out. Check Y positions.");
-            notesToDraw.sort((a, b) => a.time - b.time);
-            return true;
+            console.log(`Staff (loadNoteData): Processed ${notesToDraw.length}/${rawNotes.length} notes. Visual end: ${songEndTimeVisual.toFixed(3)}s`);
+            if (notesToDraw.length === 0 && rawNotes.length > 0) console.error("Staff (loadNoteData): All notes filtered. Check Y positions.");
+            notesToDraw.sort((a, b) => a.time - b.time); return true;
         } else {
-            console.error("Staff Module (loadNoteData) Error: Invalid note data format.");
-            notesToDraw = []; totalNotesInSong = 0; songEndTimeVisual = 0;
-            if (ctx) redrawCanvasInternal();
-            return false;
+            console.error("Staff (loadNoteData) Error: Invalid note data format.");
+            notesToDraw = []; totalNotesInSong = 0; songEndTimeVisual = 0; if (ctx) redrawCanvasInternal(); return false;
         }
     } catch (error) {
-        console.error("Staff Module (loadNoteData): Fatal Error:", error);
-        alert("Error processing notes file.");
-        notesToDraw = []; totalNotesInSong = 0; songEndTimeVisual = 0;
-        if (ctx) redrawCanvasInternal();
-        return false;
+        console.error("Staff (loadNoteData): Fatal Error:", error); alert("Error processing notes file.");
+        notesToDraw = []; totalNotesInSong = 0; songEndTimeVisual = 0; if (ctx) redrawCanvasInternal(); return false;
     }
 }
 
 // --- Public Interface ---
+/** Initializes the Staff Module. */
 export function init(config) {
     console.log("Staff Module: init() called.");
-    if (!config || !config.noteDataJson || !config.staffSectionElement || typeof config.setAudioPauseOffset !== 'function' ||
-        typeof config.isWaitModeActive !== 'function' || typeof config.isCurrentlyWaitingForKey !== 'function' || // Check for new callbacks
-        typeof config.getWaitingForNote !== 'function' || typeof config.onWaitModeEnter !== 'function' ||
-        typeof config.onWaitModeExit !== 'function' || typeof config.applyScoreCallback !== 'function') {
-        console.error("Staff Module Error: Missing required configuration in init (jsonData, staffElement, callbacks for audio offset and wait mode).");
-        return false;
+    // Validate all required config properties (including new getters)
+    const requiredConfigs = [
+        'noteDataJson', 'staffSectionElement', 'setAudioPauseOffset',
+        'getIsGameOver', 'getUseColoredNotes', 'getScrollSpeed',
+        'getHitWindowGoodSec', 'getHitWindowPerfectSec', 'getPreDelaySeconds',
+        'isWaitModeActive', 'isCurrentlyWaitingForKey', 'getWaitingForNote',
+        'onWaitModeEnter', 'onWaitModeExit', 'applyScoreCallback'
+    ];
+    for (const key of requiredConfigs) {
+        if (typeof config[key] === 'undefined') { // Check for undefined instead of just falsy
+             console.error(`Staff Module Error: Missing required configuration in init: '${key}'.`);
+             return false;
+        }
     }
 
     staffSectionElement = config.staffSectionElement;
-    setAudioPauseOffsetFunc = config.setAudioPauseOffset;
+    setAudioPauseOffsetFunc = config.setAudioPauseOffset; // For drag-to-seek
 
-    // Store Wait Mode callbacks from main.js
+    // Store functions/getters from main.js
+    mainGetIsGameOver = config.getIsGameOver;
+    mainGetUseColoredNotes = config.getUseColoredNotes;
+    mainGetScrollSpeed = config.getScrollSpeed;
+    mainGetHitWindowGoodSec = config.getHitWindowGoodSec;
+    mainGetHitWindowPerfectSec = config.getHitWindowPerfectSec;
+    mainGetPreDelaySeconds = config.getPreDelaySeconds;
+    // Store Wait Mode callbacks/getters
     mainIsWaitModeActive = config.isWaitModeActive;
     mainIsCurrentlyWaitingForKey = config.isCurrentlyWaitingForKey;
     mainGetWaitingForNote = config.getWaitingForNote;
     mainOnWaitModeEnter = config.onWaitModeEnter;
     mainOnWaitModeExit = config.onWaitModeExit;
     mainApplyScoreCallback = config.applyScoreCallback;
-
-    console.log("Staff Module (init): Callbacks (including wait mode) stored.");
+    console.log("Staff Module (init): All callbacks and getters from main.js stored.");
 
     canvas = document.getElementById('staffCanvas');
-    if (!canvas || !staffSectionElement.contains(canvas)) { console.error("Staff Module Error: Canvas #staffCanvas not found/inside staffSection!"); return false; }
+    if (!canvas || !staffSectionElement.contains(canvas)) { console.error("Staff Error: Canvas #staffCanvas missing!"); return false; }
     ctx = canvas.getContext('2d');
-    if (!ctx) { console.error("Staff Module Error: Could not get 2D context!"); return false; }
+    if (!ctx) { console.error("Staff Error: No 2D context!"); return false; }
     devicePixelRatio = window.devicePixelRatio || 1;
-    console.log(`Staff Module (init): Canvas context obtained. DPR: ${devicePixelRatio}`);
+    console.log(`Staff (init): Canvas context obtained. DPR: ${devicePixelRatio}`);
 
-    if (typeof getMidiNoteColor !== 'function') console.error("Staff Module CRITICAL: getMidiNoteColor not imported.");
-    if (!audio) { console.error("Staff Module CRITICAL: Audio module not imported."); return false; }
+    if (typeof getMidiNoteColor !== 'function') console.error("Staff CRITICAL: getMidiNoteColor missing.");
+    if (!audio) { console.error("Staff CRITICAL: Audio module missing."); return false; }
 
-    console.log("Staff Module (init): Calling setupStaffAndNotes() BEFORE loadNoteData().");
     setupStaffAndNotes();
+    if (!loadNoteData(config.noteDataJson)) { console.error("Staff (init): Failed to load note data."); return false; }
 
-    console.log("Staff Module (init): Calling loadNoteData().");
-    const notesLoaded = loadNoteData(config.noteDataJson);
-    if (!notesLoaded) { console.error("Staff Module (init): Failed to load note data. Aborting."); return false; }
+    handleResizeInternal(); displayTime = MIN_DISPLAY_TIME; redrawCanvasInternal();
 
-    console.log("Staff Module (init): Performing initial resize and draw.");
-    handleResizeInternal();
-    displayTime = MIN_DISPLAY_TIME;
-    redrawCanvasInternal(); // Initial draw
-
-    // Start animation loop immediately if not game over. It will handle its running state internally.
-    // This ensures the loop starts even if the game begins paused, to handle drags or initial state.
-    if (!isGameOver() && !animationFrameId) { // Use isGameOver()
-        console.log("Staff Module (init): Starting animation loop.");
+    if (!mainGetIsGameOver() && !animationFrameId) {
+        console.log("Staff (init): Starting animation loop.");
         animationFrameId = requestAnimationFrame(animationLoop);
     }
 
-
     if (canvas) {
-        console.log("Staff Module (init): Attaching drag event listeners...");
-        canvas.addEventListener('mousedown', handleDragStart);
-        window.addEventListener('mousemove', handleDragMove);
-        window.addEventListener('mouseup', handleDragEnd);
-        canvas.addEventListener('touchstart', handleDragStart, { passive: false });
-        window.addEventListener('touchmove', handleDragMove, { passive: false });
-        window.addEventListener('touchend', handleDragEnd);
+        console.log("Staff (init): Attaching drag listeners.");
+        canvas.addEventListener('mousedown', handleDragStart); window.addEventListener('mousemove', handleDragMove);
+        window.addEventListener('mouseup', handleDragEnd); canvas.addEventListener('touchstart', handleDragStart, { passive: false });
+        window.addEventListener('touchmove', handleDragMove, { passive: false }); window.addEventListener('touchend', handleDragEnd);
         window.addEventListener('touchcancel', handleDragEnd);
     }
-
     console.log("Staff Module: Initialization complete.");
     return true;
 }
 
-export function handleResize() { console.log("Staff Module: Public handleResize() called."); handleResizeInternal(); }
-export function play(resumeOffset = 0) { console.log(`Staff Module: Public play(offset: ${resumeOffset.toFixed(3)}) called.`); playAnimationInternal(resumeOffset); }
-export function pause() { console.log("Staff Module: Public pause() called."); return pauseAnimationInternal(); }
+export function handleResize() { console.log("Staff: Public handleResize()."); handleResizeInternal(); }
+export function play(resumeOffset = 0) { console.log(`Staff: Public play(offset: ${resumeOffset.toFixed(3)}).`); playAnimationInternal(resumeOffset); }
+export function pause() { console.log("Staff: Public pause()."); return pauseAnimationInternal(); }
 export function redraw() {
-    console.log("Staff Module: Public redraw() called.");
-    if (!isStaffRunning && audio && !mainIsCurrentlyWaitingForKey()) { // Only sync if user-paused
-        let currentAudioTime = audio.getPlaybackTime();
-        displayTime = Math.max(MIN_DISPLAY_TIME, currentAudioTime);
+    console.log("Staff: Public redraw().");
+    if (!isStaffRunning && audio && !mainIsCurrentlyWaitingForKey()) {
+        displayTime = Math.max(MIN_DISPLAY_TIME, audio.getPlaybackTime());
     }
     redrawCanvasInternal();
 }
-export function isRunning() { return isStaffRunning && !mainIsCurrentlyWaitingForKey(); } // Staff considered "running" if scrolling and not in wait mode pause
+export function isRunning() { return isStaffRunning && !mainIsCurrentlyWaitingForKey(); }
 export function judgeKeyPress(keyName) { return judgeKeyPressInternal(keyName); }
-export function resetNotes() { console.log("Staff Module: Public resetNotes() called."); resetNotesInternal(); }
-export function resetTime() { console.log("Staff Module: Public resetTime() called."); resetTimeInternal(); }
+export function resetNotes() { console.log("Staff: Public resetNotes()."); resetNotesInternal(); }
+export function resetTime() { console.log("Staff: Public resetTime()."); resetTimeInternal(); }
 
 console.log("Staff Module: Script fully parsed.");
