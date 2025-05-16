@@ -14,7 +14,6 @@ import * as audio from './audioModule.js'; // Audio playback functions
 import { getMidiNoteColor } from './midiColorConverter.js'; // Color conversion utility
 
 // --- Placeholder for functions/values that will be passed from main.js during init ---
-// These will be replaced by actual functions/getters from main.js via the init config.
 let mainGetIsGameOver = () => { console.warn("Staff: mainGetIsGameOver not initialized"); return false; };
 let mainGetUseColoredNotes = () => { console.warn("Staff: mainGetUseColoredNotes not initialized"); return false; };
 let mainGetScrollSpeed = () => { console.warn("Staff: mainGetScrollSpeed not initialized"); return 120; };
@@ -86,7 +85,7 @@ let isDragging = false;
 let dragStartX = 0;
 let dragStartTime = 0;
 let activeFlashes = [];
-let setAudioPauseOffsetFunc = (offset) => { // This is for drag-to-seek functionality
+let setAudioPauseOffsetFunc = (offset) => {
     console.warn("Staff Module: setAudioPauseOffsetFunc (for drag) was not set during init.", offset);
 };
 
@@ -234,11 +233,14 @@ function animationLoop() {
 
     if (mainIsCurrentlyWaitingForKey()) {
         // console.log("Staff (animationLoop): In Wait Mode pause, static redraw.");
-    } else if (isStaffRunning) {
+        // displayTime remains unchanged while waiting for key.
+    } else if (isStaffRunning) { // Only advance time if staff is supposed to be actively scrolling with audio
         if (audio) { displayTime = Math.max(MIN_DISPLAY_TIME, audio.getPlaybackTime()); }
         else { console.warn("Staff (animationLoop): Audio module missing for timing."); }
     }
+    // If !isStaffRunning and !mainIsCurrentlyWaitingForKey(), it means user paused, so displayTime also remains unchanged.
 
+    // Check for missed notes only if not already waiting for a key (to prevent multiple triggers for same note)
     if (!mainIsCurrentlyWaitingForKey()) {
         const missThresholdTime = displayTime - mainGetHitWindowGoodSec(); // USE GETTER
         notesToDraw.forEach(note => {
@@ -249,8 +251,9 @@ function animationLoop() {
 
                 if (mainIsWaitModeActive()) {
                     console.log(`Staff (animationLoop): Wait Mode active. Entering wait for note: ${note.name}`);
-                    // isStaffRunning = false; // Main will set its gameIsRunning, staff follows that via isStaffRunning
-                    mainOnWaitModeEnter(note); // Notify main.js
+                    isStaffRunning = false; // Explicitly set staff's internal running state to false as it's now pausing.
+                    mainOnWaitModeEnter(note); // Notify main.js to handle audio pause and global state.
+                                               // The animation loop continues for redraws and key checks.
                 }
             }
         });
@@ -269,7 +272,7 @@ function judgeKeyPressInternal(keyName) {
             const targetPitchClass = getPitchClass(noteToHit.name);
             if (targetPitchClass === keyName) {
                 console.log(`Staff (judgeKeyPressInternal): Correct key '${keyName}' for waiting note '${noteToHit.name}'. Resuming.`);
-                mainOnWaitModeExit(); // Notify main.js to resume
+                mainOnWaitModeExit(); // Notify main.js to resume audio & clear waiting state. Main will call staff.play().
                 return 'resumed_wait_mode'; // Special non-scoring return
             } else {
                 console.log(`Staff (judgeKeyPressInternal): Incorrect key '${keyName}' while waiting for '${targetPitchClass}'.`);
@@ -281,11 +284,16 @@ function judgeKeyPressInternal(keyName) {
         }
     }
 
-    if (!isStaffRunning || mainGetIsGameOver() || !audio) return null;
+    // Normal key press judgment (not in wait mode pause)
+    if (!isStaffRunning || mainGetIsGameOver() || !audio) {
+        // console.log(`Staff (judgeKeyPressInternal): Cannot judge. StaffRunning: ${isStaffRunning}, GameOver: ${mainGetIsGameOver()}, Audio: ${!!audio}`);
+        return null;
+    }
+
 
     const currentJudgmentTime = displayTime; let hitResult = null; let bestNote = null; let minTimeDiff = Infinity;
     for (const note of notesToDraw) {
-        if (note.hitStatus) continue;
+        if (note.hitStatus) continue; // Skip already hit or missed notes
         const timeDiff = note.time - currentJudgmentTime; const absTimeDiff = Math.abs(timeDiff);
         if (absTimeDiff <= mainGetHitWindowGoodSec()) { // USE GETTER
             const notePitchClass = getPitchClass(note.name);
@@ -312,42 +320,48 @@ function judgeKeyPressInternal(keyName) {
 function playAnimationInternal(resumeOffset = 0) {
     console.log(`Staff (playAnimationInternal): Attempting play. isStaffRunning: ${isStaffRunning}, GameOver: ${mainGetIsGameOver()}, Waiting: ${mainIsCurrentlyWaitingForKey()}, AudioReady: ${audio?.isReady()}`);
     if (mainGetIsGameOver() || mainIsCurrentlyWaitingForKey()) {
-        console.warn(`Staff (playAnimationInternal): Cannot play. GameOver or WaitingForKey.`);
+        console.warn(`Staff (playAnimationInternal): Cannot play. GameOver or WaitingForKey. GameOver: ${mainGetIsGameOver()}, Waiting: ${mainIsCurrentlyWaitingForKey()}`);
         return;
     }
+    // This condition is key: play only if staff is NOT already considered running.
     if (!isStaffRunning && audio && audio.isReady()) {
         console.log(`Staff (playAnimationInternal): Playing animation/audio from offset: ${resumeOffset.toFixed(3)}s. PreDelay: ${mainGetPreDelaySeconds()}`);
-        isStaffRunning = true; // Staff is now actively scrolling
+        isStaffRunning = true; // Set to true *now* that we are starting/resuming.
         if (canvas) canvas.style.cursor = 'default';
         audio.play(resumeOffset, mainGetPreDelaySeconds()); // USE GETTER for pre-delay
-        if (!animationFrameId) {
+        if (!animationFrameId) { // Start animation loop if not already running
             console.log("Staff (playAnimationInternal): Requesting new animation frame.");
-            displayTime = Math.max(MIN_DISPLAY_TIME, audio.getPlaybackTime());
+            displayTime = Math.max(MIN_DISPLAY_TIME, audio.getPlaybackTime()); // Sync display time
             animationFrameId = requestAnimationFrame(animationLoop);
         }
     } else {
-        console.warn(`Staff (playAnimationInternal): Conditions not met. isStaffRunning: ${isStaffRunning}, AudioReady: ${audio?.isReady()}`);
+        console.warn(`Staff (playAnimationInternal): Conditions not met or already running. isStaffRunning: ${isStaffRunning}, AudioReady: ${audio?.isReady()}`);
     }
 }
 
 /** Internal implementation to pause staff animation and audio (user-initiated). */
 function pauseAnimationInternal() {
-    console.log(`Staff (pauseAnimationInternal): Attempting pause. isStaffRunning: ${isStaffRunning}`);
+    console.log(`Staff (pauseAnimationInternal): Attempting pause. Current isStaffRunning: ${isStaffRunning}`);
     if (mainIsCurrentlyWaitingForKey()) {
         console.log("Staff (pauseAnimationInternal): Already paused by Wait Mode. User pause redundant.");
+        // isStaffRunning should already be false due to the fix in animationLoop when entering wait mode.
         return audio ? audio.getPlaybackTime() : displayTime;
     }
-    if (isStaffRunning) {
-        isStaffRunning = false; // Staff scrolling stops
+    if (isStaffRunning) { // Only act if staff was actively running
+        isStaffRunning = false; // Staff scrolling stops due to user pause
         if (canvas) canvas.style.cursor = 'grab';
-        if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
-        const pauseOff = audio ? audio.pause() : 0; // User pause, so pause audio
+        // Animation frame will stop on its own due to isStaffRunning being false.
+        // We can cancel it explicitly too if desired, but the condition in animationLoop handles it.
+        // if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+
+        const pauseOff = audio ? audio.pause() : 0; // User pause, so pause audio.
         console.log(`Staff (pauseAnimationInternal): User Paused. Audio offset: ${pauseOff.toFixed(3)}`);
-        displayTime = Math.max(MIN_DISPLAY_TIME, pauseOff);
+        displayTime = Math.max(MIN_DISPLAY_TIME, pauseOff); // Sync display time to pause point
         return pauseOff;
     }
+    // If not running (e.g., already paused by user), return current time
     const currentAudioTime = audio ? audio.getPlaybackTime() : displayTime;
-    console.log(`Staff (pauseAnimationInternal): Was not running. Current time: ${currentAudioTime.toFixed(3)}`);
+    console.log(`Staff (pauseAnimationInternal): Was not running (or already user-paused). Current time: ${currentAudioTime.toFixed(3)}`);
     return currentAudioTime;
 }
 
@@ -372,13 +386,14 @@ function handleResizeInternal() {
 }
 function getEventX(event) { return event.touches ? event.touches[0].clientX : event.clientX; }
 function handleDragStart(event) {
+    // Allow dragging only if user-paused (isStaffRunning is false AND not waiting for key)
     if (!isStaffRunning && !mainGetIsGameOver() && canvas && !mainIsCurrentlyWaitingForKey()) {
         isDragging = true; dragStartX = getEventX(event) - canvas.getBoundingClientRect().left; dragStartTime = displayTime;
         canvas.classList.add('dragging'); if (event.target === canvas) event.preventDefault();
     }
 }
 function handleDragMove(event) {
-    if (isDragging && canvas) {
+    if (isDragging && canvas) { // isDragging implies it's a user-paused drag
         const deltaX = (getEventX(event) - canvas.getBoundingClientRect().left) - dragStartX;
         const deltaTimeOffset = deltaX / mainGetScrollSpeed(); // USE GETTER
         displayTime = Math.max(MIN_DISPLAY_TIME, dragStartTime - deltaTimeOffset);
@@ -387,10 +402,10 @@ function handleDragMove(event) {
     }
 }
 function handleDragEnd(event) {
-    if (isDragging && canvas) {
+    if (isDragging && canvas) { // isDragging implies it's a user-paused drag
         isDragging = false; canvas.classList.remove('dragging');
         const newOffset = Math.max(0, displayTime);
-        setAudioPauseOffsetFunc(newOffset); // This is for drag-to-seek, passed from main
+        setAudioPauseOffsetFunc(newOffset); // This updates main.js's audioPauseOffset for drag-to-seek
         console.log(`Staff (handleDragEnd): Drag ended. Updated audioPauseOffset (drag) to: ${newOffset.toFixed(3)}s`);
         if (event.target === canvas) event.preventDefault();
     }
@@ -427,7 +442,6 @@ function loadNoteData(jsonData) {
 /** Initializes the Staff Module. */
 export function init(config) {
     console.log("Staff Module: init() called.");
-    // Validate all required config properties (including new getters)
     const requiredConfigs = [
         'noteDataJson', 'staffSectionElement', 'setAudioPauseOffset',
         'getIsGameOver', 'getUseColoredNotes', 'getScrollSpeed',
@@ -436,23 +450,21 @@ export function init(config) {
         'onWaitModeEnter', 'onWaitModeExit', 'applyScoreCallback'
     ];
     for (const key of requiredConfigs) {
-        if (typeof config[key] === 'undefined') { // Check for undefined instead of just falsy
+        if (typeof config[key] === 'undefined') {
              console.error(`Staff Module Error: Missing required configuration in init: '${key}'.`);
              return false;
         }
     }
 
     staffSectionElement = config.staffSectionElement;
-    setAudioPauseOffsetFunc = config.setAudioPauseOffset; // For drag-to-seek
+    setAudioPauseOffsetFunc = config.setAudioPauseOffset;
 
-    // Store functions/getters from main.js
     mainGetIsGameOver = config.getIsGameOver;
     mainGetUseColoredNotes = config.getUseColoredNotes;
     mainGetScrollSpeed = config.getScrollSpeed;
     mainGetHitWindowGoodSec = config.getHitWindowGoodSec;
     mainGetHitWindowPerfectSec = config.getHitWindowPerfectSec;
     mainGetPreDelaySeconds = config.getPreDelaySeconds;
-    // Store Wait Mode callbacks/getters
     mainIsWaitModeActive = config.isWaitModeActive;
     mainIsCurrentlyWaitingForKey = config.isCurrentlyWaitingForKey;
     mainGetWaitingForNote = config.getWaitingForNote;
@@ -476,7 +488,8 @@ export function init(config) {
 
     handleResizeInternal(); displayTime = MIN_DISPLAY_TIME; redrawCanvasInternal();
 
-    if (!mainGetIsGameOver() && !animationFrameId) {
+    // Start animation loop. It checks conditions internally.
+    if (!animationFrameId) { // Prevent multiple loops if init is somehow called again
         console.log("Staff (init): Starting animation loop.");
         animationFrameId = requestAnimationFrame(animationLoop);
     }
@@ -497,11 +510,14 @@ export function play(resumeOffset = 0) { console.log(`Staff: Public play(offset:
 export function pause() { console.log("Staff: Public pause()."); return pauseAnimationInternal(); }
 export function redraw() {
     console.log("Staff: Public redraw().");
+    // Only sync displayTime if it's a user-initiated pause (not waiting for key)
     if (!isStaffRunning && audio && !mainIsCurrentlyWaitingForKey()) {
         displayTime = Math.max(MIN_DISPLAY_TIME, audio.getPlaybackTime());
     }
     redrawCanvasInternal();
 }
+// isRunning now reflects if the staff is actively scrolling with the song,
+// not just if the animation loop is active (which it is during wait mode key wait).
 export function isRunning() { return isStaffRunning && !mainIsCurrentlyWaitingForKey(); }
 export function judgeKeyPress(keyName) { return judgeKeyPressInternal(keyName); }
 export function resetNotes() { console.log("Staff: Public resetNotes()."); resetNotesInternal(); }
