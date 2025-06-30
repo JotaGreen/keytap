@@ -3,11 +3,12 @@
  * Provides functionality to convert a MIDI note number to an sRGB color value
  * based on the OKHSL color space.
  *
- * The color mapping uses hue based on the pitch class (0-11) and lightness
- * interpolated across a defined MIDI range (default: 24-108) and lightness
- * range (default: 0.275-0.80). Saturation is kept constant (default: 1.0).
+ * The color mapping uses:
+ * - Hue based on the pitch class (C is red 30°, each semitone rotates 30°)
+ * - Lightness linearly interpolated across a defined MIDI range (C1 to C8) and lightness range (0.275-0.80)
+ * - Saturation is kept constant (default: 1.0)
  *
- * Code mostly copied from Björn Ottosson
+ * OKHSL to sRGB code adapted from Björn Ottosson
  * https://github.com/bottosson/bottosson.github.io/blob/master/misc/colorpicker/colorconversion.js
  */
 
@@ -45,7 +46,6 @@ const SATURATION = 1.0;
 
 /**
  * Maps MIDI pitch classes (0-11) to hue angles in degrees (0-360).
- * Note: Pitch class 11 (B) maps to 0 degrees (same as C).
  * @const {Object<number, number>}
  */
 const PITCH_CLASS_HUE_MAP_DEGREES = {
@@ -60,7 +60,7 @@ const PITCH_CLASS_HUE_MAP_DEGREES = {
     8: 270, // G#
     9: 300, // A
     10: 330,// A#
-    11: 0   // B (maps back to red-ish hue like C)
+    11: 0   // B
 };
 
 
