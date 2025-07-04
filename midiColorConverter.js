@@ -4,7 +4,7 @@
  * based on the OKHSL color space.
  *
  * The color mapping uses:
- * - Hue based on the pitch class (C is red 30°, each semitone rotates 30°)
+ * - Hue based on the pitch class (C is blue 270°, each semitone rotates 30°)
  * - Lightness linearly interpolated across a defined MIDI range (C1 to C8) and lightness range (0.275-0.80)
  * - Saturation is kept constant (default: 1.0)
  *
@@ -49,18 +49,18 @@ const SATURATION = 1.0;
  * @const {Object<number, number>}
  */
 const PITCH_CLASS_HUE_MAP_DEGREES = {
-    0: 30,  // C
-    1: 60,  // C#
-    2: 90,  // D
-    3: 120, // D#
-    4: 150, // E
-    5: 180, // F
-    6: 210, // F#
-    7: 240, // G
-    8: 270, // G#
-    9: 300, // A
-    10: 330,// A#
-    11: 0   // B
+    0: 270,  // C
+    1: 300,  // C#
+    2: 330,  // D
+    3: 0, // D#
+    4: 30, // E
+    5: 60, // F
+    6: 90, // F#
+    7: 120, // G
+    8: 150, // G#
+    9: 180, // A
+    10: 210,// A#
+    11: 240   // B
 };
 
 
